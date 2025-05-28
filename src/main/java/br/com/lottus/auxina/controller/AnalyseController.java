@@ -20,10 +20,25 @@ public class AnalyseController {
         this.analyseService = analyseService;
     }
 
-    @PostMapping("/trigger-book-test")
+    @PostMapping("/trigger-book-pagination-test")
     public Mono<ResponseEntity<TestResult>> triggerLibraryPaginationTest() {
         return analyseService.performanceLibraryServicePaginationTest()
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.status(500).build());
     }
+
+    @PostMapping("/trigger-categoria-created-test")
+    public Mono<ResponseEntity<TestResult>> triggerCadastrarCategoriaTest(){
+        return analyseService.cadastrarCategoria()
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.status(500).build());
+    }
+
+    @PostMapping("/trigger-livro-created-test")
+    public Mono<ResponseEntity<TestResult>> triggerCadastrarLivroTest(){
+        return analyseService.cadastrarLivro()
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.status(500).build());
+    }
+
 }

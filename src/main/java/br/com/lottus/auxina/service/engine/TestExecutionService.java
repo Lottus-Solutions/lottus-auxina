@@ -1,4 +1,4 @@
-package br.com.lottus.auxina.service;
+package br.com.lottus.auxina.service.engine; // Exemplo de novo pacote
 
 import br.com.lottus.auxina.dto.ActuatorMetricsResponse;
 import br.com.lottus.auxina.dto.ScenarioType;
@@ -24,92 +24,23 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-@Service
-public class AnalyseService {
+@Service // Este é o motor de execução
+public class TestExecutionService {
 
-    private static final Logger logger = LoggerFactory.getLogger(AnalyseService.class);
+    private static final Logger logger = LoggerFactory.getLogger(TestExecutionService.class);
     private static final Pattern FAKER_PLACEHOLDER_PATTERN = Pattern.compile("^Faker::(\\w+)\\.(\\w+)(?:\\(([^)]*)\\))?$");
 
-    private final WebClient libraryServiceClient;
+    private final WebClient libraryServiceClient; // WebClient para o serviço alvo
     private final Faker faker;
     private final MeterRegistry meterRegistry;
 
-    public AnalyseService(WebClient libraryServiceClient, Faker faker, MeterRegistry meterRegistry) {
+    public TestExecutionService(WebClient libraryServiceClient, Faker faker, MeterRegistry meterRegistry) {
         this.libraryServiceClient = libraryServiceClient;
         this.faker = faker;
         this.meterRegistry = meterRegistry;
     }
 
-    public Mono<TestResult> performanceLibraryServicePaginationTest() {
-        final String testName = "TesteDePaginacao";
-        final String targetEndpoint = "/livros";
-
-        String paginaValue = String.valueOf(faker.number().numberBetween(0, 5));
-        String tamanhoValue = String.valueOf(faker.number().numberBetween(5, 15));
-
-        Map<String, String> queryParams = new HashMap<>();
-        queryParams.put("pagina", paginaValue);
-
-        queryParams.put("tamanho", tamanhoValue);
-
-        TestCaseConfigDTO paginationTestConfig = TestCaseConfigDTO.builder()
-                .testName(testName)
-                .httpMethod("GET")
-                .endpoint(targetEndpoint)
-                .queryParamsTemplate(queryParams)
-                .scenarioType(ScenarioType.HAPPY_PATH)
-                .expectedHtppStatus(200)
-                .build();
-
-        return executarConfigurableTest(paginationTestConfig);
-    }
-
-    public Mono<TestResult> cadastrarCategoria(){
-        final String testName = "TesteCadastrarNovaCategoria";
-        final String targetEndpoint = "/categorias";
-
-        String nome = "Fantasia";
-        Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("nome", nome);
-
-        TestCaseConfigDTO cadastrarCategoriaTestConfig = TestCaseConfigDTO.builder()
-                .testName(testName)
-                .httpMethod("POST")
-                .endpoint(targetEndpoint)
-                .requestBodyTemplate(requestBody)
-                .scenarioType(ScenarioType.HAPPY_PATH)
-                .expectedHtppStatus(201)
-                .build();
-
-
-        return executarConfigurableTest(cadastrarCategoriaTestConfig);
-
-    }
-
-    public Mono<TestResult> cadastrarLivro(){
-        final String testName = "TesteCadastrarNovoLivro";
-        final String targetEndpoint = "/livros";
-
-        Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("nome", "Harry Potter e a Pedra Filosofal");
-        requestBody.put("autor", "J.K Rowlling");
-        requestBody.put("quantidade", "Faker::Number.numberBetween(1,100)");
-        requestBody.put("categoriaId", "1");
-        requestBody.put("descricao", "Faker::Lorem.sentence(10,5)");
-
-        TestCaseConfigDTO cadastrarNovoLivroTestConfig = TestCaseConfigDTO.builder()
-                .testName(testName)
-                .httpMethod("POST")
-                .endpoint("/livros")
-                .requestBodyTemplate(requestBody)
-                .scenarioType(ScenarioType.HAPPY_PATH)
-                .expectedHtppStatus(201)
-                .build();
-
-        return executarConfigurableTest(cadastrarNovoLivroTestConfig);
-    }
-
-    public Mono<TestResult> executarConfigurableTest(TestCaseConfigDTO config) {
+    public Mono<TestResult> executeTest(TestCaseConfigDTO config) { // Nomeado de forma mais genérica
         long startTime = System.nanoTime();
         Timer.Sample sample = Timer.start(meterRegistry);
 
@@ -138,7 +69,7 @@ public class AnalyseService {
                 requestHeadersSpec = libraryServiceClient.get()
                         .uri(uriBuilder -> {
                             uriBuilder.path(config.getEndpoint());
-                            if (queryParams != null) {
+                            if (queryParams != null && !queryParams.isEmpty()) {
                                 queryParams.forEach(uriBuilder::queryParam);
                             }
                             return uriBuilder.build();
@@ -161,7 +92,6 @@ public class AnalyseService {
                                 .collect(Collectors.joining("&"));
                     }
 
-
                     TestResult.TestResultBuilder resultBuilder = TestResult.builder()
                             .testName(config.getTestName())
                             .targetEndpoint(endpointDetails)
@@ -172,7 +102,7 @@ public class AnalyseService {
                     return clientResponse.releaseBody()
                             .then(Mono.defer(() -> {
                                 if (clientResponse.statusCode().is2xxSuccessful()) {
-                                    return getBookServiceMemoryUsage()
+                                    return getTargetServiceMemoryUsage() // Renomeado para ser mais genérico
                                             .map(memoryMb -> resultBuilder.targetServiceMemoryUsedMB(memoryMb).build())
                                             .defaultIfEmpty(resultBuilder.build());
                                 } else {
@@ -201,6 +131,9 @@ public class AnalyseService {
                     logger.info("Teste configurável {} (cenário: {}) concluído com sinal: {}", config.getTestName(), config.getScenarioType(), signalType);
                 });
     }
+
+    // Métodos generateRequestBody, generateQueryParams, processTemplate, invokeFakerMethod,
+    // applyScenarioSpecificModifications permanecem os mesmos aqui, mas são privados.
 
     private Object generateRequestBody(TestCaseConfigDTO config) {
         if (config.getRequestBodyTemplate() == null) {
@@ -321,7 +254,7 @@ public class AnalyseService {
     private void applyScenarioSpecificModifications(Map<String, Object> data,
                                                     ScenarioType scenarioType,
                                                     Map<String, ?> originalTemplate) {
-        if (scenarioType == null || originalTemplate == null) return;
+        if (scenarioType == null || originalTemplate == null || data == null) return;
 
         switch (scenarioType) {
             case INVALID_INPUT_BAD_REQUEST:
@@ -332,16 +265,17 @@ public class AnalyseService {
                 if (originalTemplate.containsKey("age") && data.containsKey("age")) {
                     data.put("age", -5);
                 }
-                if (originalTemplate.containsKey("name") && data.containsKey("name")) {
-                    data.put("name", "");
+                if (originalTemplate.containsKey("nome") && data.containsKey("nome")) { // Assumindo que 'nome' é um campo comum
+                    data.put("nome", "");
+                }
+                if (originalTemplate.containsKey("quantidade") && data.containsKey("quantidade")) { // Exemplo para livro
+                    data.put("quantidade", -1);
                 }
                 if (originalTemplate.containsKey("requiredField") && data.containsKey("requiredField")) {
                     data.put("requiredField", null);
                 }
                 break;
             case HAPPY_PATH:
-                // No specific overrides by default for happy path, as Faker should generate valid data.
-                // Add if specific happy path values are needed that Faker might not default to.
                 break;
             case RESOURCE_NOT_FOUND:
                 if (data.containsKey("id") && originalTemplate.containsKey("id")) {
@@ -353,7 +287,7 @@ public class AnalyseService {
         }
     }
 
-    private Mono<Double> getBookServiceMemoryUsage() {
+    private Mono<Double> getTargetServiceMemoryUsage() {
         final String memoryMetricEndpoint = "/actuator/metrics/jvm.memory.used";
         return libraryServiceClient.get()
                 .uri(memoryMetricEndpoint)
