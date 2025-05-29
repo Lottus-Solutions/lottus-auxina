@@ -14,4 +14,6 @@ public class TestResult {
     private long durationMillis;
     private int httpStatus;
     private Double targetServiceMemoryUsedMB;
+
+    private String methodGroupKey;
 }

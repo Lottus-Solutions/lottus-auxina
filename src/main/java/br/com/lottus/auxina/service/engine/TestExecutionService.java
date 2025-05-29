@@ -24,13 +24,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-@Service // Este é o motor de execução
+@Service
 public class TestExecutionService {
 
     private static final Logger logger = LoggerFactory.getLogger(TestExecutionService.class);
     private static final Pattern FAKER_PLACEHOLDER_PATTERN = Pattern.compile("^Faker::(\\w+)\\.(\\w+)(?:\\(([^)]*)\\))?$");
 
-    private final WebClient libraryServiceClient; // WebClient para o serviço alvo
+    private final WebClient libraryServiceClient;
     private final Faker faker;
     private final MeterRegistry meterRegistry;
 
@@ -95,19 +95,16 @@ public class TestExecutionService {
                     TestResult.TestResultBuilder resultBuilder = TestResult.builder()
                             .testName(config.getTestName())
                             .targetEndpoint(endpointDetails)
+                            .methodGroupKey(config.getMethodGroupKey())
                             .success(success)
                             .durationMillis(TimeUnit.NANOSECONDS.toMillis(durationNanos))
                             .httpStatus(clientResponse.statusCode().value());
 
                     return clientResponse.releaseBody()
                             .then(Mono.defer(() -> {
-                                if (clientResponse.statusCode().is2xxSuccessful()) {
                                     return getTargetServiceMemoryUsage() // Renomeado para ser mais genérico
                                             .map(memoryMb -> resultBuilder.targetServiceMemoryUsedMB(memoryMb).build())
                                             .defaultIfEmpty(resultBuilder.build());
-                                } else {
-                                    return Mono.just(resultBuilder.build());
-                                }
                             }));
                 })
                 .onErrorResume(ex -> {
@@ -120,6 +117,7 @@ public class TestExecutionService {
 
                     return Mono.just(TestResult.builder()
                             .testName(config.getTestName())
+                            .methodGroupKey(config.getMethodGroupKey())
                             .targetEndpoint(config.getEndpoint())
                             .success(isExpectedNetworkError)
                             .durationMillis(TimeUnit.NANOSECONDS.toMillis(durationNanos))

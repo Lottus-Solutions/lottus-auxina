@@ -20,6 +20,8 @@ public class TestCaseConfigDTO {
     private String expectedResponseBodyPattern;
     private String expectedErrorCode;
 
+    private String methodGroupKey;
+
 
 
 }
