@@ -2,8 +2,7 @@ package br.com.lottus.auxina.controller;
 
 import br.com.lottus.auxina.dto.ModuleTestDTO;
 import br.com.lottus.auxina.dto.TestResult;
-import br.com.lottus.auxina.service.CategoriaTestService;
-import br.com.lottus.auxina.service.LivroTestService;
+import br.com.lottus.auxina.service.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,11 +18,19 @@ import java.util.List;
 public class TestTriggerController {
 
     private final LivroTestService livroTestService;
-    private final CategoriaTestService categoriaTestService; // Adicione @Autowired ou no construtor se for usar
+    private final CategoriaTestService categoriaTestService;
+    private final AlunoTestService alunoTestService;
+    private final EmprestimoTestService emprestimoTestService;
+    private final TurmaTestService turmaTestService;
 
-    public TestTriggerController(LivroTestService livroTestService, CategoriaTestService categoriaTestService) {
+    public TestTriggerController(LivroTestService livroTestService, CategoriaTestService categoriaTestService,
+                                 AlunoTestService alunoTestService, EmprestimoTestService emprestimoTestService,
+                                 TurmaTestService turmaTestService) {
         this.livroTestService = livroTestService;
         this.categoriaTestService = categoriaTestService;
+        this.alunoTestService = alunoTestService;
+        this.emprestimoTestService = emprestimoTestService;
+        this.turmaTestService = turmaTestService;
     }
 
     @PostMapping("/module/livros")
@@ -42,20 +49,35 @@ public class TestTriggerController {
         return Mono.just(ResponseEntity.ok(ModuleTestDTO.builder().moduleName("Categorias (Não Implementado Completamente)").build()));
     }
 
-    @PostMapping("/all-modules")
-    public Flux<ModuleTestDTO> triggerAllDefinedModuleTests() {
-        List<Mono<ModuleTestDTO>> allModuleMonos = new ArrayList<>();
+    @PostMapping("module/alunos")
+    public Mono<ResponseEntity<ModuleTestDTO>> triggerAllAlunosModuleTests(){
 
-        allModuleMonos.add(livroTestService.runAllLivroTests());
-
-        if (categoriaTestService != null && categoriaTestService.getClass().getDeclaredMethods().length > 1) { // Check to avoid NPE if not fully implemented
-            // allModuleMonos.add(categoriaTestService.runAllCategoriaTests()); // Descomente quando CategoriaTestService estiver pronto
+        if(alunoTestService != null && alunoTestService.getClass().getDeclaredMethods().length > 1){
+            return alunoTestService.runAllAlunoTests()
+                    .map(ResponseEntity::ok);
         }
-        // Adicione outros módulos aqui
 
-        if (allModuleMonos.isEmpty()){
-            return Flux.just(ModuleTestDTO.builder().moduleName("Nenhum módulo de teste encontrado/implementado").build());
-        }
-        return Flux.merge(allModuleMonos);
+        return Mono.just(ResponseEntity.ok(ModuleTestDTO.builder().moduleName("Alunos (Não implementado Completamente)").build()));
     }
+
+    @PostMapping("module/emprestimos")
+    public Mono<ResponseEntity<ModuleTestDTO>> triggerAllEmprestimosModuleTests(){
+
+        if(emprestimoTestService != null && emprestimoTestService.getClass().getDeclaredMethods().length > 1){
+            return emprestimoTestService.runAllEmprestimoTests()
+                    .map(ResponseEntity::ok);
+        }
+
+        return Mono.just(ResponseEntity.ok(ModuleTestDTO.builder().moduleName("Alunos (Não implementado Completamente)").build()));
+    }
+
+    @PostMapping("module/turmas")
+    public Mono<ResponseEntity<ModuleTestDTO>> triggerAllTurmasModuleTests() {
+        if (turmaTestService != null && turmaTestService.getClass().getDeclaredMethods().length > 1) {
+            return turmaTestService.runAllTurmaTests()
+                    .map(ResponseEntity::ok);
+        }
+        return Mono.just(ResponseEntity.ok(ModuleTestDTO.builder().moduleName("Turmas (Não implementado Completamente)").build()));
+    }
+
 }
