@@ -4,6 +4,8 @@ import br.com.lottus.auxina.dto.ActuatorMetricsResponse;
 import br.com.lottus.auxina.dto.ScenarioType;
 import br.com.lottus.auxina.dto.TestCaseConfigDTO;
 import br.com.lottus.auxina.dto.TestResult;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javafaker.Faker;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -27,25 +29,41 @@ import java.util.stream.Collectors;
 @Service
 public class TestExecutionService {
 
+
+
     private static final Logger logger = LoggerFactory.getLogger(TestExecutionService.class);
     private static final Pattern FAKER_PLACEHOLDER_PATTERN = Pattern.compile("^Faker::(\\w+)\\.(\\w+)(?:\\(([^)]*)\\))?$");
 
     private final WebClient libraryServiceClient;
     private final Faker faker;
     private final MeterRegistry meterRegistry;
+    private final ObjectMapper objectMapper; // Injetar ObjectMapper para serialização JSON
 
-    public TestExecutionService(WebClient libraryServiceClient, Faker faker, MeterRegistry meterRegistry) {
+    public TestExecutionService(WebClient libraryServiceClient, Faker faker, MeterRegistry meterRegistry, ObjectMapper objectMapper) {
         this.libraryServiceClient = libraryServiceClient;
         this.faker = faker;
         this.meterRegistry = meterRegistry;
+        this.objectMapper = objectMapper; // Injetar
     }
 
-    public Mono<TestResult> executeTest(TestCaseConfigDTO config) { // Nomeado de forma mais genérica
+    public Mono<TestResult> executeTest(TestCaseConfigDTO config) {
         long startTime = System.nanoTime();
         Timer.Sample sample = Timer.start(meterRegistry);
 
-        Object requestBody = generateRequestBody(config);
+        // Este é o objeto que será enviado como corpo da requisição (para POST/PUT)
+        Object requestBodyObject = generateRequestBody(config);
         Map<String, String> queryParams = generateQueryParams(config);
+
+        // Serializar o requestBodyObject para String (JSON) para armazenar no TestResult
+        String requestPayloadString = null;
+        if (requestBodyObject != null) {
+            try {
+                requestPayloadString = objectMapper.writeValueAsString(requestBodyObject);
+            } catch (JsonProcessingException e) {
+                logger.error("Erro ao serializar requestBody para o teste {}: {}", config.getTestName(), e.getMessage());
+                requestPayloadString = "ERRO_AO_SERIALIZAR_REQUEST_BODY: " + e.getMessage();
+            }
+        }
 
         WebClient.RequestBodySpec requestBodySpec;
         WebClient.RequestHeadersSpec<?> requestHeadersSpec;
@@ -55,12 +73,13 @@ public class TestExecutionService {
         switch (httpMethodUpper) {
             case "POST":
                 requestBodySpec = libraryServiceClient.post().uri(config.getEndpoint());
-                requestHeadersSpec = (requestBody != null) ? requestBodySpec.bodyValue(requestBody) : requestBodySpec;
+                requestHeadersSpec = (requestBodyObject != null) ? requestBodySpec.bodyValue(requestBodyObject) : requestBodySpec;
                 break;
             case "PUT":
                 requestBodySpec = libraryServiceClient.put().uri(config.getEndpoint());
-                requestHeadersSpec = (requestBody != null) ? requestBodySpec.bodyValue(requestBody) : requestBodySpec;
+                requestHeadersSpec = (requestBodyObject != null) ? requestBodySpec.bodyValue(requestBodyObject) : requestBodySpec;
                 break;
+            // ... (casos DELETE, GET como antes) ...
             case "DELETE":
                 requestHeadersSpec = libraryServiceClient.delete().uri(config.getEndpoint());
                 break;
@@ -76,6 +95,9 @@ public class TestExecutionService {
                         });
                 break;
         }
+
+        // Capturar o requestPayloadString final para usar no builder
+        final String finalRequestPayloadString = requestPayloadString;
 
         return requestHeadersSpec
                 .exchangeToMono(clientResponse -> {
@@ -98,16 +120,17 @@ public class TestExecutionService {
                             .methodGroupKey(config.getMethodGroupKey())
                             .success(success)
                             .durationMillis(TimeUnit.NANOSECONDS.toMillis(durationNanos))
-                            .httpStatus(clientResponse.statusCode().value());
+                            .httpStatus(clientResponse.statusCode().value())
+                            .requestPayload(finalRequestPayloadString); // ADICIONADO AQUI
 
-                    return clientResponse.releaseBody()
-                            .then(Mono.defer(() -> {
-                                    return getTargetServiceMemoryUsage() // Renomeado para ser mais genérico
-                                            .map(memoryMb -> resultBuilder.targetServiceMemoryUsedMB(memoryMb).build())
-                                            .defaultIfEmpty(resultBuilder.build());
-                            }));
+                    // A lógica de buscar memória continua após liberar o corpo da RESPOSTA
+                    return clientResponse.releaseBody() // É importante liberar o corpo da RESPOSTA
+                            .then(Mono.defer(() -> getTargetServiceMemoryUsage()
+                                    .map(memoryMb -> resultBuilder.targetServiceMemoryUsedMB(memoryMb).build())
+                                    .defaultIfEmpty(resultBuilder.build())
+                            ));
                 })
-                .onErrorResume(ex -> {
+                .onErrorResume(ex -> { // Erros de comunicação
                     long durationNanos = System.nanoTime() - startTime;
                     logger.error("Erro de comunicação ao executar teste configurável {}: {}", config.getTestName(), ex.getMessage());
                     boolean isExpectedNetworkError = config.getExpectedHtppStatus() == 0;
@@ -122,17 +145,17 @@ public class TestExecutionService {
                             .success(isExpectedNetworkError)
                             .durationMillis(TimeUnit.NANOSECONDS.toMillis(durationNanos))
                             .httpStatus(0)
+                            .requestPayload(finalRequestPayloadString) // ADICIONADO AQUI TAMBÉM
                             .build());
                 })
                 .doFinally(signalType -> {
                     sample.stop(meterRegistry.timer(config.getTestName() + ".overall.duration"));
-                    logger.info("Teste configurável {} (cenário: {}) concluído com sinal: {}", config.getTestName(), config.getScenarioType(), signalType);
+                    // logger.info(...);
                 });
     }
 
-    // Métodos generateRequestBody, generateQueryParams, processTemplate, invokeFakerMethod,
-    // applyScenarioSpecificModifications permanecem os mesmos aqui, mas são privados.
-
+    // ... (todos os outros métodos: generateRequestBody, generateQueryParams, processTemplate, invokeFakerMethod, applyScenarioSpecificModifications, getTargetServiceMemoryUsage)
+    // permanecem os mesmos ...
     private Object generateRequestBody(TestCaseConfigDTO config) {
         if (config.getRequestBodyTemplate() == null) {
             return null;
@@ -172,7 +195,7 @@ public class TestExecutionService {
                         Object fakerValue = invokeFakerMethod(matcher.group(1), matcher.group(2), matcher.group(3));
                         result.put(key, fakerValue);
                     } catch (Exception e) {
-                        logger.warn("Falha ao invocar método Faker para placeholder '{}': {}. Usando placeholder como valor literal.", value, e.getMessage());
+                        // logger.warn("Falha ao invocar método Faker para placeholder '{}': {}. Usando placeholder como valor literal.", value, e.getMessage());
                         result.put(key, value);
                     }
                 } else {
@@ -189,7 +212,7 @@ public class TestExecutionService {
                                     try {
                                         return invokeFakerMethod(matcher.group(1), matcher.group(2), matcher.group(3));
                                     } catch (Exception e) {
-                                        logger.warn("Falha ao invocar método Faker para placeholder em lista '{}': {}. Usando placeholder.", item, e.getMessage());
+                                        // logger.warn("Falha ao invocar método Faker para placeholder em lista '{}': {}. Usando placeholder.", item, e.getMessage());
                                         return item;
                                     }
                                 }
@@ -263,10 +286,10 @@ public class TestExecutionService {
                 if (originalTemplate.containsKey("age") && data.containsKey("age")) {
                     data.put("age", -5);
                 }
-                if (originalTemplate.containsKey("nome") && data.containsKey("nome")) { // Assumindo que 'nome' é um campo comum
+                if (originalTemplate.containsKey("nome") && data.containsKey("nome")) {
                     data.put("nome", "");
                 }
-                if (originalTemplate.containsKey("quantidade") && data.containsKey("quantidade")) { // Exemplo para livro
+                if (originalTemplate.containsKey("quantidade") && data.containsKey("quantidade")) {
                     data.put("quantidade", -1);
                 }
                 if (originalTemplate.containsKey("requiredField") && data.containsKey("requiredField")) {
@@ -284,7 +307,6 @@ public class TestExecutionService {
                 break;
         }
     }
-
     private Mono<Double> getTargetServiceMemoryUsage() {
         final String memoryMetricEndpoint = "/actuator/metrics/jvm.memory.used";
         return libraryServiceClient.get()
@@ -296,10 +318,9 @@ public class TestExecutionService {
                         double memoryBytes = metricResponse.getMeasurements().get(0).getValue();
                         return memoryBytes / (1024.0 * 1024.0);
                     }
-                    logger.warn("Resposta da métrica de memória vazia ou malformada para {}", memoryMetricEndpoint);
                     return null;
                 })
-                .doOnError(e -> logger.warn("Falha ao obter métrica de memória do serviço alvo ({}): {}", memoryMetricEndpoint, e.getMessage()))
                 .onErrorResume(e -> Mono.empty());
     }
+
 }

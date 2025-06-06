@@ -12,7 +12,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,124 +23,179 @@ public class TurmaTestService {
 
     private final TestExecutionService testExecutionService;
     private final Faker faker;
-    private static final String DEFAULT_EXISTING_TURMA_ID = "1";
+
+    private static final String TURMA_ID_1_CADASTRADA = "1"; // "1 Ano A - Matutino"
+    private static final String TURMA_ID_2_CADASTRADA = "2"; // "2 Ano B - Vespertino"
+    private static final String TURMA_ID_3_PARA_DELETAR_E_TESTAR = "3"; // "Turma Temporária Para Deletar"
+    private static final String TURMA_ID_INEXISTENTE = "99999";
+    private static final String TURMA_ID_FORMATO_INVALIDO = "abc";
 
     public TurmaTestService(TestExecutionService testExecutionService, Faker faker) {
         this.testExecutionService = testExecutionService;
         this.faker = faker;
     }
 
-    private static final String GROUP_LISTAR_TURMAS = "ListarTodasTurmas";
     private static final String GROUP_CADASTRAR_TURMA = "CadastrarTurma";
+    private static final String GROUP_LISTAR_TURMAS = "ListarTodasTurmas";
     private static final String GROUP_EDITAR_TURMA = "EditarTurma";
     private static final String GROUP_DELETAR_TURMA = "DeletarTurma";
 
-    private TestCaseConfigDTO getConfigListarTurmasSucesso() {
-        return TestCaseConfigDTO.builder().testName("Turma_ListarTodas_Sucesso").methodGroupKey(GROUP_LISTAR_TURMAS).httpMethod("GET").endpoint("/turmas").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-
-    private Map<String, Object> getBaseCadastroTurmaBody(String serie) {
+    private Map<String, Object> getTurmaBody(String serie) {
         Map<String, Object> body = new HashMap<>();
         body.put("serie", serie);
         return body;
     }
 
-    private TestCaseConfigDTO getConfigCadastrarTurmaSucesso() {
-        String serie = faker.educator().course() + " " + faker.letterify("?").toUpperCase();
-        return TestCaseConfigDTO.builder().testName("Turma_Cadastrar_Sucesso").methodGroupKey(GROUP_CADASTRAR_TURMA).httpMethod("POST").endpoint("/turmas").requestBodyTemplate(getBaseCadastroTurmaBody(serie)).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    // Métodos de Setup (Cadastros Iniciais)
+    private TestCaseConfigDTO getConfigSetupCadastrarTurma1AnoA() {
+        return TestCaseConfigDTO.builder().testName("Turma_Setup_1_1AnoA").methodGroupKey(GROUP_CADASTRAR_TURMA)
+                .httpMethod("POST").endpoint("/turmas").requestBodyTemplate(getTurmaBody("1 Ano A - Matutino"))
+                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    }
+    private TestCaseConfigDTO getConfigSetupCadastrarTurma2AnoB() {
+        return TestCaseConfigDTO.builder().testName("Turma_Setup_2_2AnoB").methodGroupKey(GROUP_CADASTRAR_TURMA)
+                .httpMethod("POST").endpoint("/turmas").requestBodyTemplate(getTurmaBody("2 Ano B - Vespertino"))
+                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    }
+    private TestCaseConfigDTO getConfigSetupCadastrarTurmaParaDeletar() {
+        return TestCaseConfigDTO.builder().testName("Turma_Setup_3_ParaDeletar").methodGroupKey(GROUP_CADASTRAR_TURMA)
+                .httpMethod("POST").endpoint("/turmas").requestBodyTemplate(getTurmaBody("Turma Temporária Para Deletar"))
+                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
 
     private TestCaseConfigDTO getConfigCadastrarTurmaSerieEmBranco() {
-        return TestCaseConfigDTO.builder().testName("Turma_Cadastrar_Erro_SerieEmBranco").methodGroupKey(GROUP_CADASTRAR_TURMA).httpMethod("POST").endpoint("/turmas").requestBodyTemplate(getBaseCadastroTurmaBody("Faker::Lorem.word()")).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
+        return TestCaseConfigDTO.builder().testName("Turma_Cadastrar_Erro_SerieEmBranco").methodGroupKey(GROUP_CADASTRAR_TURMA)
+                .httpMethod("POST").endpoint("/turmas").requestBodyTemplate(getTurmaBody("Faker::Lorem.word()"))
+                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
     }
 
+    // Listar Turmas - Cenários BDD
+    private TestCaseConfigDTO getConfigListarTurmas_C1_AposCadastros() {
+        return TestCaseConfigDTO.builder().testName("Turma_Listar_C1_AposCadastros").methodGroupKey(GROUP_LISTAR_TURMAS)
+                .httpMethod("GET").endpoint("/turmas").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+    private TestCaseConfigDTO getConfigListarTurmas_C2_VerificarID1() {
+        return TestCaseConfigDTO.builder().testName("Turma_Listar_C2_VerificarID1").methodGroupKey(GROUP_LISTAR_TURMAS)
+                .httpMethod("GET").endpoint("/turmas").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+    private TestCaseConfigDTO getConfigListarTurmas_C3_VerificarID2() {
+        return TestCaseConfigDTO.builder().testName("Turma_Listar_C3_VerificarID2").methodGroupKey(GROUP_LISTAR_TURMAS)
+                .httpMethod("GET").endpoint("/turmas").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+    private TestCaseConfigDTO getConfigListarTurmas_C4_AposRemocaoID3() {
+        return TestCaseConfigDTO.builder().testName("Turma_Listar_C4_AposRemocaoID3").methodGroupKey(GROUP_LISTAR_TURMAS)
+                .httpMethod("GET").endpoint("/turmas").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+    private TestCaseConfigDTO getConfigListarTurmas_C5_NaoRetornarInexistentes() {
+        return TestCaseConfigDTO.builder().testName("Turma_Listar_C5_NaoRetornarInexistentes").methodGroupKey(GROUP_LISTAR_TURMAS)
+                .httpMethod("GET").endpoint("/turmas").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+
+    // Editar Turma - Cenários BDD
+    private TestCaseConfigDTO getConfigEditarTurma_C1_Sucesso() {
+        return TestCaseConfigDTO.builder().testName("Turma_Editar_C1_Sucesso").methodGroupKey(GROUP_EDITAR_TURMA)
+                .httpMethod("PUT").endpoint("/turmas/" + TURMA_ID_1_CADASTRADA)
+                .requestBodyTemplate(getTurmaBody("1 Ano A - Integral"))
+                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+    private TestCaseConfigDTO getConfigEditarTurma_C2_IdNaoExistente() {
+        return TestCaseConfigDTO.builder().testName("Turma_Editar_C2_Erro_IdNaoExistente").methodGroupKey(GROUP_EDITAR_TURMA)
+                .httpMethod("PUT").endpoint("/turmas/" + TURMA_ID_INEXISTENTE)
+                .requestBodyTemplate(getTurmaBody("Qualquer Serie"))
+                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    }
+    private TestCaseConfigDTO getConfigEditarTurma_C3_SerieJaExistente() {
+        return TestCaseConfigDTO.builder().testName("Turma_Editar_C3_Erro_SerieJaExistente").methodGroupKey(GROUP_EDITAR_TURMA)
+                .httpMethod("PUT").endpoint("/turmas/" + TURMA_ID_1_CADASTRADA)
+                .requestBodyTemplate(getTurmaBody("2 Ano B - Vespertino"))
+                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(409).build();
+    }
+    private TestCaseConfigDTO getConfigEditarTurma_C4_IdFormatoInvalido() {
+        return TestCaseConfigDTO.builder().testName("Turma_Editar_C4_Erro_IdFormatoInvalido").methodGroupKey(GROUP_EDITAR_TURMA)
+                .httpMethod("PUT").endpoint("/turmas/" + TURMA_ID_FORMATO_INVALIDO)
+                .requestBodyTemplate(getTurmaBody("Qualquer Serie"))
+                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
+    }
+    private TestCaseConfigDTO getConfigEditarTurma_C5_SerieEmBranco() {
+        return TestCaseConfigDTO.builder().testName("Turma_Editar_C5_Erro_SerieEmBranco").methodGroupKey(GROUP_EDITAR_TURMA)
+                .httpMethod("PUT").endpoint("/turmas/" + TURMA_ID_1_CADASTRADA)
+                .requestBodyTemplate(getTurmaBody("Faker::Lorem.word()"))
+                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
+    }
+
+    // Remover Turma - Cenários BDD
+    private TestCaseConfigDTO getConfigRemoverTurma_C1_SemAlunosSucesso() {
+        return TestCaseConfigDTO.builder().testName("Turma_Remover_C1_SemAlunosSucesso").methodGroupKey(GROUP_DELETAR_TURMA)
+                .httpMethod("DELETE").endpoint("/turmas/" + TURMA_ID_3_PARA_DELETAR_E_TESTAR)
+                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(204).build();
+    }
+    private TestCaseConfigDTO getConfigRemoverTurma_C2_ComAlunos() {
+        return TestCaseConfigDTO.builder().testName("Turma_Remover_C2_Erro_ComAlunos").methodGroupKey(GROUP_DELETAR_TURMA)
+                .httpMethod("DELETE").endpoint("/turmas/" + TURMA_ID_1_CADASTRADA)
+                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
+    }
+    private TestCaseConfigDTO getConfigRemoverTurma_C3_IdNaoExistente() {
+        return TestCaseConfigDTO.builder().testName("Turma_Remover_C3_Erro_IdNaoExistente").methodGroupKey(GROUP_DELETAR_TURMA)
+                .httpMethod("DELETE").endpoint("/turmas/" + TURMA_ID_INEXISTENTE)
+                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    }
+    private TestCaseConfigDTO getConfigRemoverTurma_C4_JaDeletada() {
+        return TestCaseConfigDTO.builder().testName("Turma_Remover_C4_Erro_JaDeletada").methodGroupKey(GROUP_DELETAR_TURMA)
+                .httpMethod("DELETE").endpoint("/turmas/" + TURMA_ID_3_PARA_DELETAR_E_TESTAR)
+                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    }
+    private TestCaseConfigDTO getConfigRemoverTurma_C5_IdFormatoInvalido() {
+        return TestCaseConfigDTO.builder().testName("Turma_Remover_C5_Erro_IdFormatoInvalido").methodGroupKey(GROUP_DELETAR_TURMA)
+                .httpMethod("DELETE").endpoint("/turmas/" + TURMA_ID_FORMATO_INVALIDO)
+                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
+    }
+
+    // Outros testes de Cadastro (não diretamente dos BDDs, mas importantes para cobertura)
+    private TestCaseConfigDTO getConfigCadastrarTurmaSucessoFaker() {
+        String serie = faker.educator().course() + " " + faker.letterify("?").toUpperCase() + " " + faker.random().hex(4);
+        return TestCaseConfigDTO.builder().testName("Turma_Cadastrar_OutroSucesso_Faker").methodGroupKey(GROUP_CADASTRAR_TURMA)
+                .httpMethod("POST").endpoint("/turmas").requestBodyTemplate(getTurmaBody(serie))
+                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    }
     private TestCaseConfigDTO getConfigCadastrarTurmaSerieMuitoLonga() {
         String serieLonga = faker.lorem().fixedString(256);
-        return TestCaseConfigDTO.builder().testName("Turma_Cadastrar_Erro_SerieMuitoLonga").methodGroupKey(GROUP_CADASTRAR_TURMA).httpMethod("POST").endpoint("/turmas").requestBodyTemplate(getBaseCadastroTurmaBody(serieLonga)).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
+        return TestCaseConfigDTO.builder().testName("Turma_Cadastrar_Erro_SerieMuitoLonga").methodGroupKey(GROUP_CADASTRAR_TURMA)
+                .httpMethod("POST").endpoint("/turmas").requestBodyTemplate(getTurmaBody(serieLonga))
+                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
     }
-
-    private TestCaseConfigDTO getConfigCadastrarTurmaSerieJaExistente() {
-        String serieExistente = "1 Ano A";
-        return TestCaseConfigDTO.builder().testName("Turma_Cadastrar_Erro_SerieJaExistente").methodGroupKey(GROUP_CADASTRAR_TURMA).httpMethod("POST").endpoint("/turmas").requestBodyTemplate(getBaseCadastroTurmaBody(serieExistente)).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(409).build();
-    }
-
     private TestCaseConfigDTO getConfigCadastrarTurmaCorpoVazio() {
-        return TestCaseConfigDTO.builder().testName("Turma_Cadastrar_Erro_CorpoVazio").methodGroupKey(GROUP_CADASTRAR_TURMA).httpMethod("POST").endpoint("/turmas").requestBodyTemplate(new HashMap<>()).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
+        return TestCaseConfigDTO.builder().testName("Turma_Cadastrar_Erro_CorpoVazio").methodGroupKey(GROUP_CADASTRAR_TURMA)
+                .httpMethod("POST").endpoint("/turmas").requestBodyTemplate(new HashMap<>())
+                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
     }
 
-    private TestCaseConfigDTO getConfigEditarTurmaSucesso() {
-        String novaSerie = faker.educator().secondarySchool() + " - Editado";
-        return TestCaseConfigDTO.builder().testName("Turma_Editar_Sucesso").methodGroupKey(GROUP_EDITAR_TURMA).httpMethod("PUT").endpoint("/turmas/" + DEFAULT_EXISTING_TURMA_ID).requestBodyTemplate(getBaseCadastroTurmaBody(novaSerie)).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-
-    private TestCaseConfigDTO getConfigEditarTurmaIdNaoExistente() {
-        String novaSerie = "Qualquer Serie";
-        return TestCaseConfigDTO.builder().testName("Turma_Editar_Erro_IdNaoExistente").methodGroupKey(GROUP_EDITAR_TURMA).httpMethod("PUT").endpoint("/turmas/99999").requestBodyTemplate(getBaseCadastroTurmaBody(novaSerie)).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
-    }
-
-    private TestCaseConfigDTO getConfigEditarTurmaSerieEmBranco() {
-        return TestCaseConfigDTO.builder().testName("Turma_Editar_Erro_SerieEmBranco").methodGroupKey(GROUP_EDITAR_TURMA).httpMethod("PUT").endpoint("/turmas/" + DEFAULT_EXISTING_TURMA_ID).requestBodyTemplate(getBaseCadastroTurmaBody("Faker::Lorem.word()")).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
-
-    private TestCaseConfigDTO getConfigEditarTurmaIdFormatoInvalido() {
-        String novaSerie = "Qualquer Serie";
-        return TestCaseConfigDTO.builder().testName("Turma_Editar_Erro_IdFormatoInvalido").methodGroupKey(GROUP_EDITAR_TURMA).httpMethod("PUT").endpoint("/turmas/abc").requestBodyTemplate(getBaseCadastroTurmaBody(novaSerie)).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
-
-    private TestCaseConfigDTO getConfigEditarTurmaParaSerieJaExistente() {
-        String serieExistente = "1 Ano A"; // Supondo que esta série já existe e pertence a outra turma
-        return TestCaseConfigDTO.builder().testName("Turma_Editar_Erro_ParaSerieJaExistente").methodGroupKey(GROUP_EDITAR_TURMA).httpMethod("PUT").endpoint("/turmas/" + DEFAULT_EXISTING_TURMA_ID).requestBodyTemplate(getBaseCadastroTurmaBody(serieExistente)).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(409).build();
-    }
-
-
-    private TestCaseConfigDTO getConfigDeletarTurmaSucesso() {
-        String idParaDeletar = "2";
-        return TestCaseConfigDTO.builder().testName("Turma_Deletar_Sucesso").methodGroupKey(GROUP_DELETAR_TURMA).httpMethod("DELETE").endpoint("/turmas/" + idParaDeletar).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(204).build();
-    }
-
-    private TestCaseConfigDTO getConfigDeletarTurmaIdNaoExistente() {
-        return TestCaseConfigDTO.builder().testName("Turma_Deletar_Erro_IdNaoExistente").methodGroupKey(GROUP_DELETAR_TURMA).httpMethod("DELETE").endpoint("/turmas/99999").scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
-    }
-
-    private TestCaseConfigDTO getConfigDeletarTurmaComAlunos() {
-        return TestCaseConfigDTO.builder().testName("Turma_Deletar_Erro_ComAlunos").methodGroupKey(GROUP_DELETAR_TURMA).httpMethod("DELETE").endpoint("/turmas/" + DEFAULT_EXISTING_TURMA_ID).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
-
-    private TestCaseConfigDTO getConfigDeletarTurmaIdFormatoInvalido() {
-        return TestCaseConfigDTO.builder().testName("Turma_Deletar_Erro_IdFormatoInvalido").methodGroupKey(GROUP_DELETAR_TURMA).httpMethod("DELETE").endpoint("/turmas/xyz").scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
-
-    private TestCaseConfigDTO getConfigDeletarTurmaJaDeletada() {
-        String idDeletadoRecentemente = "2"; // Assumindo que o teste Deletar_Sucesso usou este ID
-        return TestCaseConfigDTO.builder().testName("Turma_Deletar_Erro_JaDeletada").methodGroupKey(GROUP_DELETAR_TURMA).httpMethod("DELETE").endpoint("/turmas/" + idDeletadoRecentemente).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
-    }
 
     public Mono<ModuleTestDTO> runAllTurmaTests() {
         List<Mono<TestResult>> testMonos = new ArrayList<>();
 
-        testMonos.add(testExecutionService.executeTest(getConfigListarTurmasSucesso()));
-        // Adicionar mais 4 testes para Listar (se houver cenários de erro relevantes não cobertos)
+        // Setup: Cadastrar turmas iniciais
+        testMonos.add(testExecutionService.executeTest(getConfigSetupCadastrarTurma1AnoA()));
+        testMonos.add(testExecutionService.executeTest(getConfigSetupCadastrarTurma2AnoB()));
+        testMonos.add(testExecutionService.executeTest(getConfigSetupCadastrarTurmaParaDeletar()));
+        testMonos.add(testExecutionService.executeTest(getConfigCadastrarTurmaSucessoFaker()));
 
-        testMonos.add(testExecutionService.executeTest(getConfigCadastrarTurmaSucesso()));
+        // Testes de Listar Turmas (BDD)
+        testMonos.add(testExecutionService.executeTest(getConfigListarTurmas_C1_AposCadastros()));
+        testMonos.add(testExecutionService.executeTest(getConfigListarTurmas_C2_VerificarID1()));
+        testMonos.add(testExecutionService.executeTest(getConfigListarTurmas_C3_VerificarID2()));
+        testMonos.add(testExecutionService.executeTest(getConfigListarTurmas_C5_NaoRetornarInexistentes()));
+
+        // Testes de Editar Turma (BDD)
+        testMonos.add(testExecutionService.executeTest(getConfigEditarTurma_C1_Sucesso()));
+        testMonos.add(testExecutionService.executeTest(getConfigEditarTurma_C2_IdNaoExistente()));
+        testMonos.add(testExecutionService.executeTest(getConfigEditarTurma_C3_SerieJaExistente()));
+        testMonos.add(testExecutionService.executeTest(getConfigEditarTurma_C4_IdFormatoInvalido()));
+        testMonos.add(testExecutionService.executeTest(getConfigEditarTurma_C5_SerieEmBranco()));
+
+        // Testes Adicionais de Cadastrar Turma (não BDD, mas cobertura)
         testMonos.add(testExecutionService.executeTest(getConfigCadastrarTurmaSerieEmBranco()));
         testMonos.add(testExecutionService.executeTest(getConfigCadastrarTurmaSerieMuitoLonga()));
-        testMonos.add(testExecutionService.executeTest(getConfigCadastrarTurmaSerieJaExistente()));
         testMonos.add(testExecutionService.executeTest(getConfigCadastrarTurmaCorpoVazio()));
-
-        testMonos.add(testExecutionService.executeTest(getConfigEditarTurmaSucesso()));
-        testMonos.add(testExecutionService.executeTest(getConfigEditarTurmaIdNaoExistente()));
-        testMonos.add(testExecutionService.executeTest(getConfigEditarTurmaSerieEmBranco()));
-        testMonos.add(testExecutionService.executeTest(getConfigEditarTurmaIdFormatoInvalido()));
-        testMonos.add(testExecutionService.executeTest(getConfigEditarTurmaParaSerieJaExistente()));
-
-        testMonos.add(testExecutionService.executeTest(getConfigDeletarTurmaIdNaoExistente()));
-        testMonos.add(testExecutionService.executeTest(getConfigDeletarTurmaComAlunos()));
-        testMonos.add(testExecutionService.executeTest(getConfigDeletarTurmaIdFormatoInvalido()));
-        // O teste de sucesso para deletar e deletar já deletada precisam de uma ordem ou setup
-        // Para simplificar sem setup, adicionamos DeletarTurmaSucesso por último, assumindo que um ID "2" pode ser deletável
-        testMonos.add(testExecutionService.executeTest(getConfigDeletarTurmaSucesso()));
-        testMonos.add(testExecutionService.executeTest(getConfigDeletarTurmaJaDeletada()));
-
 
         return Flux.mergeSequential(testMonos)
                 .collectList()

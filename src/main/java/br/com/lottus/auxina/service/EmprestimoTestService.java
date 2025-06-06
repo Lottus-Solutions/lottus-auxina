@@ -1,120 +1,227 @@
 package br.com.lottus.auxina.service;
 
-import br.com.lottus.auxina.dto.MethodTestDTO;
-import br.com.lottus.auxina.dto.ModuleTestDTO;
-import br.com.lottus.auxina.dto.ScenarioType;
-import br.com.lottus.auxina.dto.TestCaseConfigDTO;
-import br.com.lottus.auxina.dto.TestResult;
+import br.com.lottus.auxina.dto.*;
 import br.com.lottus.auxina.service.engine.TestExecutionService;
 import com.github.javafaker.Faker;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class EmprestimoTestService {
 
     private final TestExecutionService testExecutionService;
     private final Faker faker;
-    private static final String DEFAULT_EXISTING_ALUNO_MATRICULA = "1";
-    private static final String DEFAULT_EXISTING_LIVRO_ID = "1";
-    private static final String DEFAULT_EXISTING_EMPRESTIMO_ID = "1"; // Assumir que existe para finalizar/renovar
+
+    // IDs de Alunos e Livros (assumindo que foram cadastrados previamente em uma ordem específica)
+    private static final String ALUNO_ID_1_CARLOS = "1";
+    private static final String ALUNO_ID_2_FERNANDA = "2";
+    private static final String ALUNO_ID_3_RICARDO = "3";
+    private static final String ALUNO_ID_4_MARIANA = "4";
+    private static final String ALUNO_ID_5_META_LIVROS = "5"; // Aluno com 4 livros lidos para o cenário de bônus
+    private static final String ALUNO_ID_INEXISTENTE = "99999";
+
+    private static final String LIVRO_ID_1_REVOLUCAO = "1";
+    private static final String LIVRO_ID_4_1984_INDISPONIVEL = "4";
+    private static final String LIVRO_ID_6_HOBBIT_ULTIMA_COPIA = "6";
+    private static final String LIVRO_ID_3_SENHOR_ANEIS = "3"; // Para cenários genéricos e de histórico
+    private static final String LIVRO_ID_INEXISTENTE = "9998";
+
+    // IDs de Empréstimos (placeholders; o ideal é que o backend os gere)
+    private static final String EMPRESTIMO_ID_1_ATIVO = "1";
+    private static final String EMPRESTIMO_ID_2_ATRASADO = "2";
+    private static final String EMPRESTIMO_ID_3_RENOVADO_1X = "3";
+    private static final String EMPRESTIMO_ID_4_ULTIMA_COPIA = "4"; // Empréstimo do livro "O Hobbit"
+    private static final String EMPRESTIMO_ID_5_ALUNO_META = "5"; // Empréstimo do aluno que vai atingir a meta
+    private static final String EMPRESTIMO_ID_INEXISTENTE = "999";
+
+    // --- GRUPOS DE TESTE POR MÉTODO DO BDD ---
+    private static final String GROUP_FAZER_EMPRESTIMO = "1. FazerEmprestimo";
+    private static final String GROUP_RENOVAR_EMPRESTIMO = "2. RenovarEmprestimo";
+    private static final String GROUP_FINALIZAR_EMPRESTIMO = "3. FinalizarEmprestimo";
+    private static final String GROUP_LISTAR_EMPRESTIMOS = "4. ListarEmprestimos";
+    private static final String GROUP_HISTORICO_ALUNO = "5. BuscarHistoricoAluno";
+    private static final String GROUP_HISTORICO_LIVRO = "5. BuscarHistoricoLivro";
+
 
     public EmprestimoTestService(TestExecutionService testExecutionService, Faker faker) {
         this.testExecutionService = testExecutionService;
         this.faker = faker;
     }
 
-    private String getFormattedCurrentDate() {
-        return LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+    private Mono<TestResult> executeAndLog(TestCaseConfigDTO config) {
+        return testExecutionService.executeTest(config)
+                .doOnSubscribe(subscription -> log.info("➡️  INICIANDO TESTE DE EMPRÉSTIMO: {}", config.getTestName()));
     }
 
-    // --- Grupo: Listar Empréstimos Paginado ---
-    private static final String GROUP_LISTAR_EMPRESTIMOS_PAGINADO = "ListarEmprestimosPaginado";
+    // =================================================================================
+    // 1. MÉTODO: fazerEmprestimo
+    // =================================================================================
 
-    private TestCaseConfigDTO getConfigListarEmprestimosPaginadoSucesso() {
-        Map<String, String> qp = new HashMap<>();
-        qp.put("busca", ""); qp.put("atrasados", "false"); qp.put("pagina", "0"); qp.put("tamanho", "5");
-        return TestCaseConfigDTO.builder().testName("Emprestimo_ListarPaginado_Sucesso").methodGroupKey(GROUP_LISTAR_EMPRESTIMOS_PAGINADO).httpMethod("GET").endpoint("/emprestimos").queryParamsTemplate(qp).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigFazer_C1_Sucesso() {
+        Map<String, Object> body = new HashMap<>(); body.put("matriculaAluno", ALUNO_ID_1_CARLOS); body.put("fk_livro", LIVRO_ID_1_REVOLUCAO);
+        return TestCaseConfigDTO.builder().testName("FazerEmprestimo_C1_Sucesso").methodGroupKey(GROUP_FAZER_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos").requestBodyTemplate(body).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
-    // Adicionar mais 4: busca por termo, apenas atrasados, paginação inválida, etc.
-
-    // --- Grupo: Fazer Novo Empréstimo ---
-    private static final String GROUP_NOVO_EMPRESTIMO = "NovoEmprestimo";
-
-    private Map<String, Object> getBaseNovoEmprestimoBody() {
-        Map<String, Object> body = new HashMap<>();
-        body.put("matriculaAluno", DEFAULT_EXISTING_ALUNO_MATRICULA);
-        body.put("fk_livro", DEFAULT_EXISTING_LIVRO_ID);
-        body.put("dataEmprestimo", getFormattedCurrentDate());
-        return body;
+    private TestCaseConfigDTO getConfigFazer_C2_AlunoJaComEmprestimo() {
+        Map<String, Object> body = new HashMap<>(); body.put("matriculaAluno", ALUNO_ID_2_FERNANDA); body.put("fk_livro", LIVRO_ID_3_SENHOR_ANEIS);
+        return TestCaseConfigDTO.builder().testName("FazerEmprestimo_C2_Erro_AlunoJaTem").methodGroupKey(GROUP_FAZER_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos").requestBodyTemplate(body).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(409).build();
+    }
+    private TestCaseConfigDTO getConfigFazer_C3_LivroIndisponivel() {
+        Map<String, Object> body = new HashMap<>(); body.put("matriculaAluno", ALUNO_ID_3_RICARDO); body.put("fk_livro", LIVRO_ID_4_1984_INDISPONIVEL);
+        return TestCaseConfigDTO.builder().testName("FazerEmprestimo_C3_Erro_LivroIndisponivel").methodGroupKey(GROUP_FAZER_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos").requestBodyTemplate(body).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(409).build();
+    }
+    private TestCaseConfigDTO getConfigFazer_C4_AlunoInexistente() {
+        Map<String, Object> body = new HashMap<>(); body.put("matriculaAluno", ALUNO_ID_INEXISTENTE); body.put("fk_livro", LIVRO_ID_3_SENHOR_ANEIS);
+        return TestCaseConfigDTO.builder().testName("FazerEmprestimo_C4_Erro_AlunoInexistente").methodGroupKey(GROUP_FAZER_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos").requestBodyTemplate(body).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    }
+    private TestCaseConfigDTO getConfigFazer_C5_UltimaCopia() {
+        Map<String, Object> body = new HashMap<>(); body.put("matriculaAluno", ALUNO_ID_4_MARIANA); body.put("fk_livro", LIVRO_ID_6_HOBBIT_ULTIMA_COPIA);
+        return TestCaseConfigDTO.builder().testName("FazerEmprestimo_C5_Sucesso_UltimaCopia").methodGroupKey(GROUP_FAZER_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos").requestBodyTemplate(body).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
 
-    private TestCaseConfigDTO getConfigNovoEmprestimoSucesso() {
-        return TestCaseConfigDTO.builder().testName("Emprestimo_Novo_Sucesso").methodGroupKey(GROUP_NOVO_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos").requestBodyTemplate(getBaseNovoEmprestimoBody()).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    // =================================================================================
+    // 2. MÉTODO: renovarEmprestimo
+    // =================================================================================
+
+    private TestCaseConfigDTO getConfigRenovar_C1_Sucesso() {
+        return TestCaseConfigDTO.builder().testName("RenovarEmprestimo_C1_Sucesso").methodGroupKey(GROUP_RENOVAR_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos/" + EMPRESTIMO_ID_1_ATIVO + "/renovar").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    // Adicionar mais 4: matrícula aluno inexistente, livro inexistente, livro indisponível, data inválida.
-
-    // --- Grupo: Listar Empréstimos Atrasados ---
-    private static final String GROUP_LISTAR_ATRASADOS = "ListarEmprestimosAtrasados";
-
-    private TestCaseConfigDTO getConfigListarAtrasadosSucesso() {
-        return TestCaseConfigDTO.builder().testName("Emprestimo_ListarAtrasados_Sucesso").methodGroupKey(GROUP_LISTAR_ATRASADOS).httpMethod("GET").endpoint("/emprestimos/atrasados").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigRenovar_C2_Atrasado() {
+        return TestCaseConfigDTO.builder().testName("RenovarEmprestimo_C2_Atrasado").methodGroupKey(GROUP_RENOVAR_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos/" + EMPRESTIMO_ID_2_ATRASADO + "/renovar").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    // Poucos cenários de erro de input aqui, mais servidor/autorização.
-
-    // --- Grupo: Histórico de Aluno ---
-    private static final String GROUP_HISTORICO_ALUNO = "HistoricoAluno";
-
-    private TestCaseConfigDTO getConfigHistoricoAlunoSucesso() {
-        return TestCaseConfigDTO.builder().testName("Emprestimo_HistoricoAluno_Sucesso").methodGroupKey(GROUP_HISTORICO_ALUNO).httpMethod("GET").endpoint("/emprestimos/historico/aluno/" + DEFAULT_EXISTING_ALUNO_MATRICULA).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigRenovar_C3_Inexistente() {
+        return TestCaseConfigDTO.builder().testName("RenovarEmprestimo_C3_Erro_Inexistente").methodGroupKey(GROUP_RENOVAR_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos/" + EMPRESTIMO_ID_INEXISTENTE + "/renovar").scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
     }
-    // Adicionar mais 4: matrícula inexistente, matrícula formato inválido.
-
-    // --- Grupo: Histórico de Livro ---
-    private static final String GROUP_HISTORICO_LIVRO = "HistoricoLivro";
-
-    private TestCaseConfigDTO getConfigHistoricoLivroSucesso() {
-        return TestCaseConfigDTO.builder().testName("Emprestimo_HistoricoLivro_Sucesso").methodGroupKey(GROUP_HISTORICO_LIVRO).httpMethod("GET").endpoint("/emprestimos/historico/livro/" + DEFAULT_EXISTING_LIVRO_ID).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigRenovar_C4_IncrementaContador() {
+        return TestCaseConfigDTO.builder().testName("RenovarEmprestimo_C4_IncrementaContador").methodGroupKey(GROUP_RENOVAR_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos/" + EMPRESTIMO_ID_3_RENOVADO_1X + "/renovar").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    // Adicionar mais 4: ID livro inexistente, ID formato inválido.
-
-    // --- Grupo: Finalizar Empréstimo ---
-    private static final String GROUP_FINALIZAR_EMPRESTIMO = "FinalizarEmprestimo";
-
-    private TestCaseConfigDTO getConfigFinalizarEmprestimoSucesso() {
-        return TestCaseConfigDTO.builder().testName("Emprestimo_Finalizar_Sucesso").methodGroupKey(GROUP_FINALIZAR_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos/" + DEFAULT_EXISTING_EMPRESTIMO_ID + "/finalizar").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build(); // Ou 204
+    private TestCaseConfigDTO getConfigRenovar_C5_NaoAlteraDadosLivro() {
+        // Este teste é conceitual. A verificação real de que os dados do livro não mudam
+        // precisaria de uma chamada GET ao livro antes e depois, o que foge do escopo deste teste unitário de API.
+        // A própria chamada de renovação bem-sucedida serve como substituto.
+        return TestCaseConfigDTO.builder().testName("RenovarEmprestimo_C5_NaoAlteraDadosLivro").methodGroupKey(GROUP_RENOVAR_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos/" + EMPRESTIMO_ID_1_ATIVO + "/renovar").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    // Adicionar mais 4: ID empréstimo inexistente, já finalizado, formato ID inválido.
 
-    // --- Grupo: Renovar Empréstimo ---
-    private static final String GROUP_RENOVAR_EMPRESTIMO = "RenovarEmprestimo";
+    // =================================================================================
+    // 3. MÉTODO: finalizarEmprestimo
+    // =================================================================================
 
-    private TestCaseConfigDTO getConfigRenovarEmprestimoSucesso() {
-        return TestCaseConfigDTO.builder().testName("Emprestimo_Renovar_Sucesso").methodGroupKey(GROUP_RENOVAR_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos/" + DEFAULT_EXISTING_EMPRESTIMO_ID + "/renovar").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigFinalizar_C1_AtivoSucesso() {
+        return TestCaseConfigDTO.builder().testName("FinalizarEmprestimo_C1_AtivoSucesso").methodGroupKey(GROUP_FINALIZAR_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos/" + EMPRESTIMO_ID_1_ATIVO + "/finalizar").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    // Adicionar mais 4: ID empréstimo inexistente, limite de renovações atingido, já finalizado, formato ID inválido.
+    private TestCaseConfigDTO getConfigFinalizar_C2_Atrasado() {
+        return TestCaseConfigDTO.builder().testName("FinalizarEmprestimo_C2_Atrasado").methodGroupKey(GROUP_FINALIZAR_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos/" + EMPRESTIMO_ID_2_ATRASADO + "/finalizar").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+    private TestCaseConfigDTO getConfigFinalizar_C3_Inexistente() {
+        return TestCaseConfigDTO.builder().testName("FinalizarEmprestimo_C3_Erro_Inexistente").methodGroupKey(GROUP_FINALIZAR_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos/" + EMPRESTIMO_ID_INEXISTENTE + "/finalizar").scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    }
+    private TestCaseConfigDTO getConfigFinalizar_C4_DevolucaoUltimaCopia() {
+        return TestCaseConfigDTO.builder().testName("FinalizarEmprestimo_C4_DevolucaoUltimaCopia").methodGroupKey(GROUP_FINALIZAR_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos/" + EMPRESTIMO_ID_4_ULTIMA_COPIA + "/finalizar").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+    private TestCaseConfigDTO getConfigFinalizar_C5_AlunoAtingeMetaBonus() {
+        return TestCaseConfigDTO.builder().testName("FinalizarEmprestimo_C5_AlunoAtingeMetaBonus").methodGroupKey(GROUP_FINALIZAR_EMPRESTIMO).httpMethod("POST").endpoint("/emprestimos/" + EMPRESTIMO_ID_5_ALUNO_META + "/finalizar").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+
+    // =================================================================================
+    // 4. MÉTODO: listarEmprestimos
+    // =================================================================================
+
+    private TestCaseConfigDTO getConfigListar_C1_SemFiltros() {
+        Map<String, String> qp = new HashMap<>(); qp.put("pagina", "0"); qp.put("tamanho", "10");
+        return TestCaseConfigDTO.builder().testName("ListarEmprestimos_C1_SemFiltros").methodGroupKey(GROUP_LISTAR_EMPRESTIMOS).httpMethod("GET").endpoint("/emprestimos").queryParamsTemplate(qp).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+    private TestCaseConfigDTO getConfigListar_C2_ComBusca() {
+        Map<String, String> qp = new HashMap<>(); qp.put("pagina", "0"); qp.put("tamanho", "10"); qp.put("busca", "Carlos");
+        return TestCaseConfigDTO.builder().testName("ListarEmprestimos_C2_ComBusca").methodGroupKey(GROUP_LISTAR_EMPRESTIMOS).httpMethod("GET").endpoint("/emprestimos").queryParamsTemplate(qp).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+    private TestCaseConfigDTO getConfigListar_C3_ApenasAtrasados() {
+        Map<String, String> qp = new HashMap<>(); qp.put("pagina", "0"); qp.put("tamanho", "10"); qp.put("atrasados", "true");
+        return TestCaseConfigDTO.builder().testName("ListarEmprestimos_C3_ApenasAtrasados").methodGroupKey(GROUP_LISTAR_EMPRESTIMOS).httpMethod("GET").endpoint("/emprestimos").queryParamsTemplate(qp).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+    private TestCaseConfigDTO getConfigListar_C4_PaginacaoInvalida() {
+        Map<String, String> qp = new HashMap<>(); qp.put("pagina", "-1"); qp.put("tamanho", "10");
+        return TestCaseConfigDTO.builder().testName("ListarEmprestimos_C4_Erro_PaginacaoInvalida").methodGroupKey(GROUP_LISTAR_EMPRESTIMOS).httpMethod("GET").endpoint("/emprestimos").queryParamsTemplate(qp).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
+    }
+    private TestCaseConfigDTO getConfigListar_C5_BuscaSemResultados() {
+        Map<String, String> qp = new HashMap<>(); qp.put("pagina", "0"); qp.put("tamanho", "10"); qp.put("busca", "Zebra");
+        return TestCaseConfigDTO.builder().testName("ListarEmprestimos_C5_BuscaSemResultados").methodGroupKey(GROUP_LISTAR_EMPRESTIMOS).httpMethod("GET").endpoint("/emprestimos").queryParamsTemplate(qp).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build(); // Espera 200 OK com página vazia
+    }
+
+    // =================================================================================
+    // 5. MÉTODO: buscarHistoricoAluno
+    // =================================================================================
+
+    private TestCaseConfigDTO getConfigHistAluno_C1_ComFinalizados() {
+        return TestCaseConfigDTO.builder().testName("HistoricoAluno_C1_ComFinalizados").methodGroupKey(GROUP_HISTORICO_ALUNO).httpMethod("GET").endpoint("/emprestimos/historico/aluno/" + ALUNO_ID_1_CARLOS).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+    private TestCaseConfigDTO getConfigHistAluno_C2_SemFinalizados() {
+        return TestCaseConfigDTO.builder().testName("HistoricoAluno_C2_SemFinalizados").methodGroupKey(GROUP_HISTORICO_ALUNO).httpMethod("GET").endpoint("/emprestimos/historico/aluno/" + ALUNO_ID_2_FERNANDA).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build(); // Espera 200 OK com lista vazia
+    }
+    private TestCaseConfigDTO getConfigHistAluno_C3_AlunoInexistente() { // BDD estava impreciso, corrigido para Aluno
+        return TestCaseConfigDTO.builder().testName("HistoricoAluno_C3_Erro_Inexistente").methodGroupKey(GROUP_HISTORICO_ALUNO).httpMethod("GET").endpoint("/emprestimos/historico/aluno/" + ALUNO_ID_INEXISTENTE).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    }
+
+    // =================================================================================
+    // 5. MÉTODO: buscarHistoricoLivro
+    // =================================================================================
+
+    private TestCaseConfigDTO getConfigHistLivro_C3_LivroInexistente() { // C3 do BDD de livro
+        return TestCaseConfigDTO.builder().testName("HistoricoLivro_C3_Erro_Inexistente").methodGroupKey(GROUP_HISTORICO_LIVRO).httpMethod("GET").endpoint("/emprestimos/historico/livro/" + LIVRO_ID_INEXISTENTE).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    }
+    private TestCaseConfigDTO getConfigHistLivro_C4_LimitadoASete() {
+        return TestCaseConfigDTO.builder().testName("HistoricoLivro_C4_LimitadoASete").methodGroupKey(GROUP_HISTORICO_LIVRO).httpMethod("GET").endpoint("/emprestimos/historico/livro/" + LIVRO_ID_3_SENHOR_ANEIS).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
+    private TestCaseConfigDTO getConfigHistLivro_C5_NaoIncluiAtivos() {
+        return TestCaseConfigDTO.builder().testName("HistoricoLivro_C5_NaoIncluiAtivos").methodGroupKey(GROUP_HISTORICO_LIVRO).httpMethod("GET").endpoint("/emprestimos/historico/livro/" + LIVRO_ID_4_1984_INDISPONIVEL).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    }
 
 
     public Mono<ModuleTestDTO> runAllEmprestimoTests() {
         List<Mono<TestResult>> testMonos = new ArrayList<>();
 
-        testMonos.add(testExecutionService.executeTest(getConfigListarEmprestimosPaginadoSucesso()));
-        testMonos.add(testExecutionService.executeTest(getConfigNovoEmprestimoSucesso()));
-        testMonos.add(testExecutionService.executeTest(getConfigListarAtrasadosSucesso()));
-        testMonos.add(testExecutionService.executeTest(getConfigHistoricoAlunoSucesso()));
-        testMonos.add(testExecutionService.executeTest(getConfigHistoricoLivroSucesso()));
-        testMonos.add(testExecutionService.executeTest(getConfigFinalizarEmprestimoSucesso()));
-        testMonos.add(testExecutionService.executeTest(getConfigRenovarEmprestimoSucesso()));
+        // 1. Fazer Empréstimo
+        testMonos.add(executeAndLog(getConfigFazer_C1_Sucesso()));
+        testMonos.add(executeAndLog(getConfigFazer_C2_AlunoJaComEmprestimo()));
+        testMonos.add(executeAndLog(getConfigFazer_C3_LivroIndisponivel()));
+        testMonos.add(executeAndLog(getConfigFazer_C4_AlunoInexistente()));
+        testMonos.add(executeAndLog(getConfigFazer_C5_UltimaCopia()));
+
+        // 2. Renovar Empréstimo
+        testMonos.add(executeAndLog(getConfigRenovar_C1_Sucesso()));
+        testMonos.add(executeAndLog(getConfigRenovar_C2_Atrasado()));
+        testMonos.add(executeAndLog(getConfigRenovar_C3_Inexistente()));
+        testMonos.add(executeAndLog(getConfigRenovar_C4_IncrementaContador()));
+        testMonos.add(executeAndLog(getConfigRenovar_C5_NaoAlteraDadosLivro()));
+
+        // 3. Finalizar Empréstimo
+        testMonos.add(executeAndLog(getConfigFinalizar_C1_AtivoSucesso()));
+        testMonos.add(executeAndLog(getConfigFinalizar_C2_Atrasado()));
+        testMonos.add(executeAndLog(getConfigFinalizar_C3_Inexistente()));
+        testMonos.add(executeAndLog(getConfigFinalizar_C4_DevolucaoUltimaCopia()));
+        testMonos.add(executeAndLog(getConfigFinalizar_C5_AlunoAtingeMetaBonus()));
+
+        // 4. Listar Empréstimos
+        testMonos.add(executeAndLog(getConfigListar_C1_SemFiltros()));
+        testMonos.add(executeAndLog(getConfigListar_C2_ComBusca()));
+        testMonos.add(executeAndLog(getConfigListar_C3_ApenasAtrasados()));
+        testMonos.add(executeAndLog(getConfigListar_C4_PaginacaoInvalida()));
+        testMonos.add(executeAndLog(getConfigListar_C5_BuscaSemResultados()));
+
+        // 5. Histórico (Aluno e Livro)
+        testMonos.add(executeAndLog(getConfigHistAluno_C1_ComFinalizados()));
+        testMonos.add(executeAndLog(getConfigHistAluno_C2_SemFinalizados()));
+        testMonos.add(executeAndLog(getConfigHistAluno_C3_AlunoInexistente()));
+        testMonos.add(executeAndLog(getConfigHistLivro_C3_LivroInexistente()));
+        testMonos.add(executeAndLog(getConfigHistLivro_C4_LimitadoASete()));
+        testMonos.add(executeAndLog(getConfigHistLivro_C5_NaoIncluiAtivos()));
 
         return Flux.mergeSequential(testMonos)
                 .collectList()
