@@ -1,320 +1,217 @@
 package br.com.lottus.auxina.service;
 
-import br.com.lottus.auxina.dto.MethodTestDTO;
-import br.com.lottus.auxina.dto.ModuleTestDTO;
-import br.com.lottus.auxina.dto.ScenarioType;
-import br.com.lottus.auxina.dto.TestCaseConfigDTO;
-import br.com.lottus.auxina.dto.TestResult;
+import br.com.lottus.auxina.dto.*;
 import br.com.lottus.auxina.service.engine.TestExecutionService;
 import com.github.javafaker.Faker;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class AlunoTestService {
-
-    // 1. ADICIONAR UM LOGGER À CLASSE
-    private static final Logger logger = LoggerFactory.getLogger(AlunoTestService.class);
 
     private final TestExecutionService testExecutionService;
     private final Faker faker;
 
+    // --- IDs DE RECURSOS ---
+    // Turmas
     private static final String TURMA_ID_1 = "1";
     private static final String TURMA_ID_2 = "2";
     private static final String TURMA_ID_INEXISTENTE = "99999";
 
-    private static final String DEFAULT_EXISTING_TURMA_ID_PARA_TESTE_ALUNO = "1";
-    private static final String MATRICULA_ALUNO_HIST_COM_ATIVO_PARA_REMOVER = "6";
+    // Alunos (IDs de Matrícula)
+    // Usados em EmprestimoTestService (NÃO DEVEM SER REMOVIDOS COM SUCESSO)
+    private static final String ALUNO_ID_1_CARLOS = "1";
+    private static final String ALUNO_ID_2_FERNANDA = "2";
+    private static final String ALUNO_ID_3_RICARDO = "3";
+    private static final String ALUNO_ID_4_MARIANA = "4";
+    private static final String ALUNO_ID_5_HIST_VARIOS = "5";
 
-    private static final String MATRICULA_CARLOS_ANDRADE = "1";
-    private static final String MATRICULA_FERNANDA_LIMA = "2";
-    private static final String MATRICULA_RICARDO_PEREIRA = "3";
-    private static final String MATRICULA_MARIANA_COSTA = "4";
-    private static final String MATRICULA_ALUNO_HIST_VARIOS = "5";
-    private static final String MATRICULA_ALUNO_PARA_REMOVER_SEM_DEPENDENCIAS = "8";
-    private static final String MATRICULA_INEXISTENTE = "99999";
-    private static final String MATRICULA_FORMATO_INVALIDO = "abc";
+    // Alunos para testes específicos deste módulo
+    private static final String ALUNO_ID_6_PARA_EDITAR = "6"; // Um aluno para editar sem impacto
+    private static final String ALUNO_ID_7_PARA_REMOVER = "7"; // Aluno limpo, para ser removido com sucesso
+    private static final String ALUNO_ID_INEXISTENTE = "99999";
 
+    // --- GRUPOS DE TESTE POR MÉTODO ---
+    private static final String GROUP_0_SETUP = "0. Setup";
+    private static final String GROUP_1_CADASTRAR = "1. Cadastrar Aluno";
+    private static final String GROUP_2_EDITAR = "2. Editar Aluno";
+    private static final String GROUP_3_BUSCAR_LISTAR = "3. Buscar e Listar Alunos";
+    private static final String GROUP_4_PERFIL = "4. Construir Perfil Aluno";
+    private static final String GROUP_5_REMOVER = "5. Remover Aluno";
 
     public AlunoTestService(TestExecutionService testExecutionService, Faker faker) {
         this.testExecutionService = testExecutionService;
         this.faker = faker;
     }
 
-    private static final String GROUP_CADASTRAR_ALUNO = "CadastrarAluno";
-    private static final String GROUP_EDITAR_ALUNO = "EditarAluno";
-    private static final String GROUP_REMOVER_ALUNO = "RemoverAluno";
-    private static final String GROUP_BUSCAR_LISTAR_ALUNOS = "BuscarListarAlunos";
-    private static final String GROUP_PERFIL_ALUNO = "ConstruirPerfilAluno";
-    private static final String GROUP_LISTAR_TURMAS_NO_ALUNO_CTRL = "ListarTurmasNoAlunoCtrl";
-
+    private Mono<TestResult> executeAndLog(TestCaseConfigDTO config) {
+        return testExecutionService.executeTest(config)
+                .doOnSubscribe(subscription -> log.info("➡️  INICIANDO TESTE DE ALUNO: {}", config.getTestName()));
+    }
 
     private Map<String, Object> getAlunoBody(String nome, String turmaId, int qtdBonus, int qtdLivrosLidos) {
         Map<String, Object> body = new HashMap<>();
         body.put("nome", nome);
-        body.put("qtdBonus", qtdBonus);
         body.put("turmaId", turmaId);
+        body.put("qtdBonus", qtdBonus);
         body.put("qtdLivrosLidos", qtdLivrosLidos);
         return body;
     }
 
-    // --- Cadastrar Aluno (BDDs e Setup) ---
-    private TestCaseConfigDTO getConfigCadastrar_C1_CarlosAndrade() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Cadastrar_C1_CarlosAndrade").methodGroupKey(GROUP_CADASTRAR_ALUNO)
-                .httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Carlos Andrade", TURMA_ID_1, 0, 0))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    // =================================================================================
+    // 0. SETUP - CADASTRO DE ALUNOS BASE
+    // =================================================================================
+
+    private TestCaseConfigDTO getConfigSetup_Carlos() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_CarlosAndrade").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Carlos Andrade", TURMA_ID_1, 0, 0)).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
-    private TestCaseConfigDTO getConfigSetupCadastrarFernandaLima() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Setup_FernandaLima").methodGroupKey(GROUP_CADASTRAR_ALUNO)
-                .httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Fernanda Lima", TURMA_ID_1, 0, 0))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    private TestCaseConfigDTO getConfigSetup_Fernanda() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_FernandaLima").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Fernanda Lima", TURMA_ID_1, 0, 0)).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
-    private TestCaseConfigDTO getConfigSetupCadastrarRicardoPereira() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Setup_RicardoPereira").methodGroupKey(GROUP_CADASTRAR_ALUNO)
-                .httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Ricardo Pereira", TURMA_ID_1, 0, 0))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    private TestCaseConfigDTO getConfigSetup_Ricardo() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_RicardoPereira").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Ricardo Pereira", TURMA_ID_1, 0, 0)).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
-    private TestCaseConfigDTO getConfigSetupCadastrarMarianaCosta() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Setup_MarianaCosta").methodGroupKey(GROUP_CADASTRAR_ALUNO)
-                .httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Mariana Costa", TURMA_ID_1, 0, 0))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    private TestCaseConfigDTO getConfigSetup_Mariana() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_MarianaCosta").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Mariana Costa", TURMA_ID_1, 0, 0)).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
-    private TestCaseConfigDTO getConfigSetupCadastrarAlunoHistVarios() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Setup_AlunoHistVarios").methodGroupKey(GROUP_CADASTRAR_ALUNO)
-                .httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Aluno Hist Varios", TURMA_ID_2, 10, 4))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    private TestCaseConfigDTO getConfigSetup_AlunoHistVarios() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_AlunoHistVarios").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Aluno Hist Varios", TURMA_ID_2, 10, 4)).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    }
+    private TestCaseConfigDTO getConfigSetup_AlunoParaEditar() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_AlunoParaEditar").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Aluno Original Para Editar", TURMA_ID_2, 0, 0)).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    }
+    private TestCaseConfigDTO getConfigSetup_AlunoParaRemover() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_AlunoParaRemover").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Aluno Descartável", TURMA_ID_2, 0, 0)).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
 
-    private TestCaseConfigDTO getConfigCadastrarAluno_ParaHistoricoComAtivo() { // Esperado ter matrícula "8"
-        return TestCaseConfigDTO.builder().testName("Aluno_Cadastrar_ParaHistoricoComAtivo").methodGroupKey(GROUP_CADASTRAR_ALUNO)
-                .httpMethod("POST").endpoint("/alunos/cadastrar")
-                .requestBodyTemplate(getAlunoBody("Aluno Hist Com Ativo", DEFAULT_EXISTING_TURMA_ID_PARA_TESTE_ALUNO, 5, 3))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    // =================================================================================
+    // 1. CADASTRAR ALUNO
+    // =================================================================================
+
+    private TestCaseConfigDTO getConfigCadastrar_C1_Sucesso() {
+        return TestCaseConfigDTO.builder().testName("Cadastrar_C1_Sucesso").methodGroupKey(GROUP_1_CADASTRAR).httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Aluno Novo Sucesso", TURMA_ID_1, 0, 0)).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    }
+    private TestCaseConfigDTO getConfigCadastrar_C2_Erro_TurmaInexistente() {
+        return TestCaseConfigDTO.builder().testName("Cadastrar_C2_Erro_TurmaInexistente").methodGroupKey(GROUP_1_CADASTRAR).httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Aluno Turma Fantasma", TURMA_ID_INEXISTENTE, 0, 0)).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
+    }
+    private TestCaseConfigDTO getConfigCadastrar_C3_Erro_NomeEmBranco() {
+        return TestCaseConfigDTO.builder().testName("Cadastrar_C3_Erro_NomeEmBranco").methodGroupKey(GROUP_1_CADASTRAR).httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("", TURMA_ID_1, 0, 0)).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
     }
 
-    private TestCaseConfigDTO getConfigSetupCadastrarAlunoParaRemoverSemDependencias() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Setup_ParaRemoverSemDependencias").methodGroupKey(GROUP_CADASTRAR_ALUNO)
-                .httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Aluno Sem Emprestimo Para Remover", TURMA_ID_2, 0, 0))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
-    }
-    private TestCaseConfigDTO getConfigCadastrar_C2_TurmaInexistente() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Cadastrar_C2_Erro_TurmaInexistente").methodGroupKey(GROUP_CADASTRAR_ALUNO)
-                .httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Aluno Turma Ruim", TURMA_ID_INEXISTENTE, 0, 0))
-                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
-    private TestCaseConfigDTO getConfigCadastrar_C3_NomeEmBranco() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Cadastrar_C3_Erro_NomeEmBranco").methodGroupKey(GROUP_CADASTRAR_ALUNO)
-                .httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Faker::Name.fullName", TURMA_ID_1, 0,0))
-                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
-    private TestCaseConfigDTO getConfigCadastrar_C4_LivrosLidosNegativo() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Cadastrar_C4_Erro_LivrosLidosNegativo").methodGroupKey(GROUP_CADASTRAR_ALUNO)
-                .httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Aluno Livros Neg", TURMA_ID_1, 0, -5))
-                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
-    private TestCaseConfigDTO getConfigCadastrar_C5_BonusNegativo() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Cadastrar_C5_Erro_BonusNegativo").methodGroupKey(GROUP_CADASTRAR_ALUNO)
-                .httpMethod("POST").endpoint("/alunos/cadastrar").requestBodyTemplate(getAlunoBody("Aluno Bonus Neg", TURMA_ID_1, -2, 0))
-                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
+    // =================================================================================
+    // 2. EDITAR ALUNO
+    // =================================================================================
 
-    // --- Editar Aluno (BDDs) ---
-    private TestCaseConfigDTO getConfigEditar_C1_TodosDadosSucesso() {
-        Map<String, Object> body = getAlunoBody("Carlos Andrade Editado", TURMA_ID_2, 10, 5);
-        body.put("matricula", MATRICULA_CARLOS_ANDRADE);
-        return TestCaseConfigDTO.builder().testName("Aluno_Editar_C1_TodosDadosSucesso").methodGroupKey(GROUP_EDITAR_ALUNO)
-                .httpMethod("PUT").endpoint("/alunos/editar/" + MATRICULA_CARLOS_ANDRADE).requestBodyTemplate(body)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigEditar_C1_Sucesso() {
+        Map<String, Object> body = getAlunoBody("Aluno Editado Com Sucesso", TURMA_ID_1, 5, 10);
+        return TestCaseConfigDTO.builder().testName("Editar_C1_Sucesso_TodosOsDados").methodGroupKey(GROUP_2_EDITAR).httpMethod("PUT").endpoint("/alunos/editar/" + ALUNO_ID_6_PARA_EDITAR).requestBodyTemplate(body).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    private TestCaseConfigDTO getConfigEditar_C2_NaoExiste() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Editar_C2_Erro_NaoExiste").methodGroupKey(GROUP_EDITAR_ALUNO)
-                .httpMethod("PUT").endpoint("/alunos/editar/" + MATRICULA_INEXISTENTE)
-                .requestBodyTemplate(getAlunoBody("Nome Qualquer", TURMA_ID_1, 0,0))
-                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    private TestCaseConfigDTO getConfigEditar_C2_Erro_NaoExiste() {
+        return TestCaseConfigDTO.builder().testName("Editar_C2_Erro_NaoExiste").methodGroupKey(GROUP_2_EDITAR).httpMethod("PUT").endpoint("/alunos/editar/" + ALUNO_ID_INEXISTENTE).requestBodyTemplate(getAlunoBody("Aluno Fantasma", TURMA_ID_1, 0, 0)).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
     }
-    private TestCaseConfigDTO getConfigEditar_C3_TurmaInexistente() {
+    private TestCaseConfigDTO getConfigEditar_C3_Erro_TurmaInexistente() {
         Map<String, Object> body = getAlunoBody("Fernanda Lima Editada", TURMA_ID_INEXISTENTE, 0, 0);
-        body.put("matricula", MATRICULA_FERNANDA_LIMA);
-        return TestCaseConfigDTO.builder().testName("Aluno_Editar_C3_Erro_TurmaInexistente").methodGroupKey(GROUP_EDITAR_ALUNO)
-                .httpMethod("PUT").endpoint("/alunos/editar/" + MATRICULA_FERNANDA_LIMA).requestBodyTemplate(body)
-                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
-    private TestCaseConfigDTO getConfigEditar_C4_ApenasNome() {
-        Map<String, Object> body = new HashMap<>(); body.put("nome", "Ricardo P. Silva");
-        body.put("matricula", MATRICULA_RICARDO_PEREIRA); // O DTO de edição pode precisar da matricula no corpo
-        body.put("turma_id", TURMA_ID_1); // E outros campos obrigatórios ou que não podem ser nulos
-        body.put("qtd_bonus", 0);
-        body.put("qtd_livros_lidos", 0);
-        return TestCaseConfigDTO.builder().testName("Aluno_Editar_C4_ApenasNome").methodGroupKey(GROUP_EDITAR_ALUNO)
-                .httpMethod("PUT").endpoint("/alunos/editar/" + MATRICULA_RICARDO_PEREIRA).requestBodyTemplate(body)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-    private TestCaseConfigDTO getConfigEditar_C5_ApenasBonus() {
-        Map<String, Object> body = getAlunoBody("Mariana Costa", TURMA_ID_1, 1, 0); // qtdBonus é int, BDD fala de 1.5, ajustar DTO se necessário
-        body.put("matricula", MATRICULA_MARIANA_COSTA);
-        return TestCaseConfigDTO.builder().testName("Aluno_Editar_C5_ApenasBonus").methodGroupKey(GROUP_EDITAR_ALUNO)
-                .httpMethod("PUT").endpoint("/alunos/editar/" + MATRICULA_MARIANA_COSTA).requestBodyTemplate(body)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+        return TestCaseConfigDTO.builder().testName("Editar_C3_Erro_TurmaInexistente").methodGroupKey(GROUP_2_EDITAR).httpMethod("PUT").endpoint("/alunos/editar/" + ALUNO_ID_2_FERNANDA).requestBodyTemplate(body).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
     }
 
-    // --- Remover Aluno (BDDs) ---
+    // =================================================================================
+    // 3. BUSCAR E LISTAR ALUNOS
+    // =================================================================================
 
-    private TestCaseConfigDTO getConfigRemover_C1_SemDependenciasSucesso() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Remover_C1_SemDependenciasSucesso").methodGroupKey(GROUP_REMOVER_ALUNO)
-                .httpMethod("DELETE").endpoint("/alunos/remover/" + MATRICULA_ALUNO_HIST_COM_ATIVO_PARA_REMOVER) // Matricula "8"
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build(); // Controller retorna 200 OK com corpo
+    private TestCaseConfigDTO getConfigListar_C1_AlunosDaTurma() {
+        return TestCaseConfigDTO.builder().testName("Listar_C1_AlunosDaTurma1").methodGroupKey(GROUP_3_BUSCAR_LISTAR).httpMethod("GET").endpoint("/alunos/turma/" + TURMA_ID_1).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    private TestCaseConfigDTO getConfigRemover_C2_NaoExiste() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Remover_C2_Erro_NaoExiste").methodGroupKey(GROUP_REMOVER_ALUNO)
-                .httpMethod("DELETE").endpoint("/alunos/remover/" + MATRICULA_INEXISTENTE)
-                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    private TestCaseConfigDTO getConfigBuscar_C2_PorMatricula() {
+        return TestCaseConfigDTO.builder().testName("Buscar_C2_PorMatricula_Carlos").methodGroupKey(GROUP_3_BUSCAR_LISTAR).httpMethod("GET").endpoint("/alunos/" + ALUNO_ID_1_CARLOS).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    private TestCaseConfigDTO getConfigRemover_C3_ComEmprestimosAtivos() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Remover_C3_Erro_ComEmprestimosAtivos").methodGroupKey(GROUP_REMOVER_ALUNO)
-                .httpMethod("DELETE").endpoint("/alunos/remover/" + MATRICULA_CARLOS_ANDRADE)
-                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build(); // Ou 409, DataIntegrity
-    }
-    private TestCaseConfigDTO getConfigRemover_C4_JaRemovido() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Remover_C4_Erro_JaRemovido").methodGroupKey(GROUP_REMOVER_ALUNO)
-                .httpMethod("DELETE").endpoint("/alunos/remover/" + MATRICULA_ALUNO_HIST_COM_ATIVO_PARA_REMOVER)
-                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    private TestCaseConfigDTO getConfigBuscar_C3_PorParteDoNome() {
+        return TestCaseConfigDTO.builder().testName("Buscar_C3_PorParteDoNome_Car").methodGroupKey(GROUP_3_BUSCAR_LISTAR).httpMethod("GET").endpoint("/alunos/nome/Car").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
 
-    // C5 (Verificar lista após remoção) é um teste do grupo BUSCAR_LISTAR_ALUNOS
+    // =================================================================================
+    // 4. CONSTRUIR PERFIL ALUNO
+    // =================================================================================
 
-    // --- Buscar/Listar Alunos (BDDs) ---
-    private TestCaseConfigDTO getConfigListar_C1_AlunosDaTurma1() {
-        return TestCaseConfigDTO.builder().testName("Aluno_BuscarListar_C1_AlunosDaTurma1").methodGroupKey(GROUP_BUSCAR_LISTAR_ALUNOS)
-                .httpMethod("GET").endpoint("/alunos/turma/" + TURMA_ID_1)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigPerfil_C1_SemEmprestimos() {
+        return TestCaseConfigDTO.builder().testName("Perfil_C1_Ricardo_SemEmprestimos").methodGroupKey(GROUP_4_PERFIL).httpMethod("GET").endpoint("/alunos/perfil/" + ALUNO_ID_3_RICARDO).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    private TestCaseConfigDTO getConfigBuscar_C2_PorMatriculaCarlos() {
-        return TestCaseConfigDTO.builder().testName("Aluno_BuscarListar_C2_PorMatriculaCarlos").methodGroupKey(GROUP_BUSCAR_LISTAR_ALUNOS)
-                .httpMethod("GET").endpoint("/alunos/" + MATRICULA_CARLOS_ANDRADE)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigPerfil_C2_ComEmprestimoAtivo() {
+        return TestCaseConfigDTO.builder().testName("Perfil_C2_Carlos_ComEmprestimoAtivo").methodGroupKey(GROUP_4_PERFIL).httpMethod("GET").endpoint("/alunos/perfil/" + ALUNO_ID_1_CARLOS).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    private TestCaseConfigDTO getConfigBuscar_C3_PorParteNomeCar() {
-        return TestCaseConfigDTO.builder().testName("Aluno_BuscarListar_C3_PorParteNomeCar").methodGroupKey(GROUP_BUSCAR_LISTAR_ALUNOS)
-                .httpMethod("GET").endpoint("/alunos/nome/car") // Ajustar se o endpoint for /buscar com query param
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-    private TestCaseConfigDTO getConfigListar_C4_AlunosTurmaVazia() { // BDD diz que lança NenhumAlunoEncontrado, o que pode ser 404 ou 200 com lista vazia. Ajustar conforme backend.
-        return TestCaseConfigDTO.builder().testName("Aluno_BuscarListar_C4_AlunosTurmaVazia").methodGroupKey(GROUP_BUSCAR_LISTAR_ALUNOS)
-                .httpMethod("GET").endpoint("/alunos/turma/" + TURMA_ID_2) // Assumindo que Turma 2 ainda não tem alunos ou após setup
-                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build(); // Ajustar se for 200 com lista vazia
-    }
-    private TestCaseConfigDTO getConfigBuscar_C5_AlunoNomeTurmaCarlos() {
-        return TestCaseConfigDTO.builder().testName("Aluno_BuscarListar_C5_AlunoNomeTurmaCarlos").methodGroupKey(GROUP_BUSCAR_LISTAR_ALUNOS)
-                .httpMethod("GET").endpoint("/alunos/buscar-aluno-nome-turma/" + TURMA_ID_1 + "/Carlos")
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-    private TestCaseConfigDTO getConfigListarAlunosAposRemocaoMatricula8() { // Para Remover C5
-        return TestCaseConfigDTO.builder().testName("Aluno_BuscarListar_AposRemocaoMatricula8").methodGroupKey(GROUP_BUSCAR_LISTAR_ALUNOS)
-                .httpMethod("GET").endpoint("/alunos/turma/" + TURMA_ID_2) // Turma do aluno removido
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigPerfil_C4_Erro_AlunoInexistente() {
+        return TestCaseConfigDTO.builder().testName("Perfil_C4_Erro_AlunoInexistente").methodGroupKey(GROUP_4_PERFIL).httpMethod("GET").endpoint("/alunos/perfil/" + ALUNO_ID_INEXISTENTE).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
     }
 
-    // --- Construir Perfil Aluno (BDDs) ---
-    private TestCaseConfigDTO getConfigPerfil_C1_RicardoSemEmprestimos() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Perfil_C1_RicardoSemEmprestimos").methodGroupKey(GROUP_PERFIL_ALUNO)
-                .httpMethod("GET").endpoint("/alunos/perfil/" + MATRICULA_RICARDO_PEREIRA)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    // =================================================================================
+    // 5. REMOVER ALUNO
+    // =================================================================================
+
+    private TestCaseConfigDTO getConfigRemover_C1_Sucesso() {
+        return TestCaseConfigDTO.builder().testName("Remover_C1_Sucesso_SemDependencias").methodGroupKey(GROUP_5_REMOVER).httpMethod("DELETE").endpoint("/alunos/remover/" + ALUNO_ID_7_PARA_REMOVER).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    private TestCaseConfigDTO getConfigPerfil_C2_CarlosComEmprestimoAtivo() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Perfil_C2_CarlosComEmprestimoAtivo").methodGroupKey(GROUP_PERFIL_ALUNO)
-                .httpMethod("GET").endpoint("/alunos/perfil/" + MATRICULA_CARLOS_ANDRADE)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigRemover_C2_Erro_NaoExiste() {
+        return TestCaseConfigDTO.builder().testName("Remover_C2_Erro_NaoExiste").methodGroupKey(GROUP_5_REMOVER).httpMethod("DELETE").endpoint("/alunos/remover/" + ALUNO_ID_INEXISTENTE).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
     }
-    private TestCaseConfigDTO getConfigPerfil_C3_FernandaComEmprestimoAtrasado() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Perfil_C3_FernandaComEmprestimoAtrasado").methodGroupKey(GROUP_PERFIL_ALUNO)
-                .httpMethod("GET").endpoint("/alunos/perfil/" + MATRICULA_FERNANDA_LIMA)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigRemover_C3_Erro_ComEmprestimosAtivos() {
+        // Tenta remover Carlos (ID 1), que tem empréstimos. A remoção DEVE falhar.
+        return TestCaseConfigDTO.builder().testName("Remover_C3_Erro_ComEmprestimosAtivos").methodGroupKey(GROUP_5_REMOVER).httpMethod("DELETE").endpoint("/alunos/remover/" + ALUNO_ID_1_CARLOS).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(409).build(); // 409 Conflict é mais semântico
     }
-    private TestCaseConfigDTO getConfigPerfil_C4_AlunoInexistente() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Perfil_C4_Erro_AlunoInexistente").methodGroupKey(GROUP_PERFIL_ALUNO)
-                .httpMethod("GET").endpoint("/alunos/perfil/" + MATRICULA_INEXISTENTE)
-                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
-    }
-    private TestCaseConfigDTO getConfigPerfil_C5_VerificarLivrosLidos() {
-        return TestCaseConfigDTO.builder().testName("Aluno_Perfil_C5_VerificarLivrosLidos").methodGroupKey(GROUP_PERFIL_ALUNO)
-                .httpMethod("GET").endpoint("/alunos/perfil/" + MATRICULA_ALUNO_HIST_VARIOS)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigRemover_C4_Erro_JaRemovido() {
+        // Tenta remover o mesmo aluno do C1 novamente.
+        return TestCaseConfigDTO.builder().testName("Remover_C4_Erro_JaRemovido").methodGroupKey(GROUP_5_REMOVER).httpMethod("DELETE").endpoint("/alunos/remover/" + ALUNO_ID_7_PARA_REMOVER).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
     }
 
-    // Outros testes que estavam no seu AlunoTestService
-    private TestCaseConfigDTO getConfigListarTodosAlunosGeral() { // GET /alunos
-        return TestCaseConfigDTO.builder().testName("Aluno_ListarTodos_Geral").methodGroupKey(GROUP_BUSCAR_LISTAR_ALUNOS).httpMethod("GET").endpoint("/alunos").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-    private TestCaseConfigDTO getConfigListarTurmasViaAlunoCtrl() { // GET /alunos/listar-turmas
-        return TestCaseConfigDTO.builder().testName("Aluno_ListarTurmas_ViaAlunoCtrl").methodGroupKey(GROUP_LISTAR_TURMAS_NO_ALUNO_CTRL).httpMethod("GET").endpoint("/alunos/listar-turmas").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-
-    private Mono<TestResult> executeAndLog(TestCaseConfigDTO config) {
-        return testExecutionService.executeTest(config)
-                .doOnSubscribe(subscription ->
-                        logger.info("➡️  INICIANDO EXECUÇÃO DO TESTE: {}", config.getTestName())
-                );
-    }
+    // --- MÉTODO PRINCIPAL DE EXECUÇÃO ---
 
     public Mono<ModuleTestDTO> runAllAlunoTests() {
-        List<Mono<TestResult>> testMonos = new ArrayList<>();
+        List<TestCaseConfigDTO> testConfigsInOrder = new ArrayList<>();
 
-        // Setup: Cadastrar alunos na ordem esperada para os testes de Empréstimo e para os BDDs
-        testMonos.add(executeAndLog(getConfigCadastrar_C1_CarlosAndrade()));
-        testMonos.add(executeAndLog(getConfigSetupCadastrarFernandaLima()));
-        testMonos.add(executeAndLog(getConfigSetupCadastrarRicardoPereira()));
-        testMonos.add(executeAndLog(getConfigSetupCadastrarMarianaCosta()));
-        testMonos.add(executeAndLog(getConfigSetupCadastrarAlunoHistVarios()));
-        testMonos.add(executeAndLog(getConfigSetupCadastrarAlunoParaRemoverSemDependencias()));
+        // FASE 0: SETUP
+        testConfigsInOrder.add(getConfigSetup_Carlos());
+        testConfigsInOrder.add(getConfigSetup_Fernanda());
+        testConfigsInOrder.add(getConfigSetup_Ricardo());
+        testConfigsInOrder.add(getConfigSetup_Mariana());
+        testConfigsInOrder.add(getConfigSetup_AlunoHistVarios());
+        testConfigsInOrder.add(getConfigSetup_AlunoParaEditar());
+        testConfigsInOrder.add(getConfigSetup_AlunoParaRemover());
 
-        // Cadastrar Aluno (BDDs de erro)
-        testMonos.add(executeAndLog(getConfigCadastrar_C2_TurmaInexistente()));
-        testMonos.add(executeAndLog(getConfigCadastrar_C3_NomeEmBranco()));
-        testMonos.add(executeAndLog(getConfigCadastrar_C4_LivrosLidosNegativo()));
-        testMonos.add(executeAndLog(getConfigCadastrar_C5_BonusNegativo()));
+        // FASE 1: CADASTRAR ALUNO
+        testConfigsInOrder.add(getConfigCadastrar_C1_Sucesso());
+        testConfigsInOrder.add(getConfigCadastrar_C2_Erro_TurmaInexistente());
+        testConfigsInOrder.add(getConfigCadastrar_C3_Erro_NomeEmBranco());
 
-        // Editar Aluno (BDDs)
-        testMonos.add(executeAndLog(getConfigEditar_C1_TodosDadosSucesso()));
-        testMonos.add(executeAndLog(getConfigEditar_C2_NaoExiste()));
-        testMonos.add(executeAndLog(getConfigEditar_C3_TurmaInexistente()));
-        testMonos.add(executeAndLog(getConfigEditar_C4_ApenasNome()));
-        testMonos.add(executeAndLog(getConfigEditar_C5_ApenasBonus()));
+        // FASE 2: EDITAR ALUNO
+        testConfigsInOrder.add(getConfigEditar_C1_Sucesso());
+        testConfigsInOrder.add(getConfigEditar_C2_Erro_NaoExiste());
+        testConfigsInOrder.add(getConfigEditar_C3_Erro_TurmaInexistente());
 
-        // Buscar/Listar Alunos (BDDs)
-        testMonos.add(executeAndLog(getConfigListar_C1_AlunosDaTurma1()));
-        testMonos.add(executeAndLog(getConfigBuscar_C2_PorMatriculaCarlos()));
-        testMonos.add(executeAndLog(getConfigBuscar_C3_PorParteNomeCar()));
-        testMonos.add(executeAndLog(getConfigListar_C4_AlunosTurmaVazia()));
-        testMonos.add(executeAndLog(getConfigBuscar_C5_AlunoNomeTurmaCarlos()));
-        testMonos.add(executeAndLog(getConfigListarTodosAlunosGeral()));
-        testMonos.add(executeAndLog(getConfigListarTurmasViaAlunoCtrl()));
+        // FASE 3: BUSCAR E LISTAR ALUNOS
+        testConfigsInOrder.add(getConfigListar_C1_AlunosDaTurma());
+        testConfigsInOrder.add(getConfigBuscar_C2_PorMatricula());
+        testConfigsInOrder.add(getConfigBuscar_C3_PorParteDoNome());
 
-        // Construir Perfil Aluno (BDDs)
-        testMonos.add(executeAndLog(getConfigPerfil_C1_RicardoSemEmprestimos()));
-        testMonos.add(executeAndLog(getConfigPerfil_C2_CarlosComEmprestimoAtivo()));
-        testMonos.add(executeAndLog(getConfigPerfil_C3_FernandaComEmprestimoAtrasado()));
-        testMonos.add(executeAndLog(getConfigPerfil_C4_AlunoInexistente()));
-        testMonos.add(executeAndLog(getConfigPerfil_C5_VerificarLivrosLidos()));
+        // FASE 4: CONSTRUIR PERFIL DO ALUNO
+        testConfigsInOrder.add(getConfigPerfil_C1_SemEmprestimos());
+        testConfigsInOrder.add(getConfigPerfil_C2_ComEmprestimoAtivo());
+        testConfigsInOrder.add(getConfigPerfil_C4_Erro_AlunoInexistente());
 
-        // Remover Aluno (BDDs) - A ordem é importante
-        testMonos.add(executeAndLog(getConfigRemover_C1_SemDependenciasSucesso()));
-        testMonos.add(executeAndLog(getConfigListarAlunosAposRemocaoMatricula8()));
-        testMonos.add(executeAndLog(getConfigRemover_C2_NaoExiste()));
-        testMonos.add(executeAndLog(getConfigRemover_C3_ComEmprestimosAtivos()));
-        testMonos.add(executeAndLog(getConfigRemover_C4_JaRemovido()));
+        // FASE 5: REMOVER ALUNO
+        testConfigsInOrder.add(getConfigRemover_C3_Erro_ComEmprestimosAtivos());
+        testConfigsInOrder.add(getConfigRemover_C1_Sucesso());
+        testConfigsInOrder.add(getConfigRemover_C4_Erro_JaRemovido());
+        testConfigsInOrder.add(getConfigRemover_C2_Erro_NaoExiste());
 
-
-        return Flux.mergeSequential(testMonos)
+        return Flux.fromIterable(testConfigsInOrder)
+                .concatMap(this::executeAndLog)
                 .collectList()
                 .map(allIndividualResults -> {
                     Map<String, List<TestResult>> groupedByMethod = allIndividualResults.stream()

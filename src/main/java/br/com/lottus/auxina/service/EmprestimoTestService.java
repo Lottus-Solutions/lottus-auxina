@@ -185,45 +185,46 @@ public class EmprestimoTestService {
 
 
     public Mono<ModuleTestDTO> runAllEmprestimoTests() {
-        List<Mono<TestResult>> testMonos = new ArrayList<>();
+        List<TestCaseConfigDTO> testConfigsInOrder = new ArrayList<>();
 
-        // 1. Fazer Empréstimo
-        testMonos.add(executeAndLog(getConfigFazer_C1_Sucesso()));
-        testMonos.add(executeAndLog(getConfigFazer_C2_AlunoJaComEmprestimo()));
-        testMonos.add(executeAndLog(getConfigFazer_C3_LivroIndisponivel()));
-        testMonos.add(executeAndLog(getConfigFazer_C4_AlunoInexistente()));
-        testMonos.add(executeAndLog(getConfigFazer_C5_UltimaCopia()));
+        // FASE 1: CRIAR O ESTADO INICIAL COM EMPRÉSTIMOS
+        testConfigsInOrder.add(getConfigFazer_C1_Sucesso());
+        testConfigsInOrder.add(getConfigFazer_C5_UltimaCopia());
+        testConfigsInOrder.add(getConfigFazer_C2_AlunoJaComEmprestimo());
+        testConfigsInOrder.add(getConfigFazer_C3_LivroIndisponivel());
+        testConfigsInOrder.add(getConfigFazer_C4_AlunoInexistente());
 
-        // 2. Renovar Empréstimo
-        testMonos.add(executeAndLog(getConfigRenovar_C1_Sucesso()));
-        testMonos.add(executeAndLog(getConfigRenovar_C2_Atrasado()));
-        testMonos.add(executeAndLog(getConfigRenovar_C3_Inexistente()));
-        testMonos.add(executeAndLog(getConfigRenovar_C4_IncrementaContador()));
-        testMonos.add(executeAndLog(getConfigRenovar_C5_NaoAlteraDadosLivro()));
+        // FASE 2: RENOVAR EMPRÉSTIMOS EXISTENTES
+        testConfigsInOrder.add(getConfigRenovar_C1_Sucesso());
+        testConfigsInOrder.add(getConfigRenovar_C5_NaoAlteraDadosLivro());
+        testConfigsInOrder.add(getConfigRenovar_C4_IncrementaContador());
+        testConfigsInOrder.add(getConfigRenovar_C2_Atrasado());
+        testConfigsInOrder.add(getConfigRenovar_C3_Inexistente());
 
-        // 3. Finalizar Empréstimo
-        testMonos.add(executeAndLog(getConfigFinalizar_C1_AtivoSucesso()));
-        testMonos.add(executeAndLog(getConfigFinalizar_C2_Atrasado()));
-        testMonos.add(executeAndLog(getConfigFinalizar_C3_Inexistente()));
-        testMonos.add(executeAndLog(getConfigFinalizar_C4_DevolucaoUltimaCopia()));
-        testMonos.add(executeAndLog(getConfigFinalizar_C5_AlunoAtingeMetaBonus()));
+        // FASE 3: LISTAR E VERIFICAR O ESTADO ATUAL
+        testConfigsInOrder.add(getConfigListar_C1_SemFiltros());
+        testConfigsInOrder.add(getConfigListar_C2_ComBusca());
+        testConfigsInOrder.add(getConfigListar_C3_ApenasAtrasados());
+        testConfigsInOrder.add(getConfigListar_C4_PaginacaoInvalida());
+        testConfigsInOrder.add(getConfigListar_C5_BuscaSemResultados());
 
-        // 4. Listar Empréstimos
-        testMonos.add(executeAndLog(getConfigListar_C1_SemFiltros()));
-        testMonos.add(executeAndLog(getConfigListar_C2_ComBusca()));
-        testMonos.add(executeAndLog(getConfigListar_C3_ApenasAtrasados()));
-        testMonos.add(executeAndLog(getConfigListar_C4_PaginacaoInvalida()));
-        testMonos.add(executeAndLog(getConfigListar_C5_BuscaSemResultados()));
+        // FASE 4: FINALIZAR EMPRÉSTIMOS
+        testConfigsInOrder.add(getConfigFinalizar_C1_AtivoSucesso());
+        testConfigsInOrder.add(getConfigFinalizar_C2_Atrasado());
+        testConfigsInOrder.add(getConfigFinalizar_C4_DevolucaoUltimaCopia());
+        testConfigsInOrder.add(getConfigFinalizar_C5_AlunoAtingeMetaBonus());
+        testConfigsInOrder.add(getConfigFinalizar_C3_Inexistente());
 
-        // 5. Histórico (Aluno e Livro)
-        testMonos.add(executeAndLog(getConfigHistAluno_C1_ComFinalizados()));
-        testMonos.add(executeAndLog(getConfigHistAluno_C2_SemFinalizados()));
-        testMonos.add(executeAndLog(getConfigHistAluno_C3_AlunoInexistente()));
-        testMonos.add(executeAndLog(getConfigHistLivro_C3_LivroInexistente()));
-        testMonos.add(executeAndLog(getConfigHistLivro_C4_LimitadoASete()));
-        testMonos.add(executeAndLog(getConfigHistLivro_C5_NaoIncluiAtivos()));
+        // FASE 5: VERIFICAR HISTÓRICOS APÓS FINALIZAÇÕES
+        testConfigsInOrder.add(getConfigHistAluno_C1_ComFinalizados());
+        testConfigsInOrder.add(getConfigHistAluno_C2_SemFinalizados());
+        testConfigsInOrder.add(getConfigHistLivro_C5_NaoIncluiAtivos());
+        testConfigsInOrder.add(getConfigHistLivro_C4_LimitadoASete());
+        testConfigsInOrder.add(getConfigHistAluno_C3_AlunoInexistente());
+        testConfigsInOrder.add(getConfigHistLivro_C3_LivroInexistente());
 
-        return Flux.mergeSequential(testMonos)
+        return Flux.fromIterable(testConfigsInOrder)
+                .concatMap(this::executeAndLog)
                 .collectList()
                 .map(allIndividualResults -> {
                     Map<String, List<TestResult>> groupedByMethod = allIndividualResults.stream()

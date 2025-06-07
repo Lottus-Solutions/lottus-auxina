@@ -1,223 +1,162 @@
 package br.com.lottus.auxina.service;
 
-import br.com.lottus.auxina.dto.MethodTestDTO;
-import br.com.lottus.auxina.dto.ModuleTestDTO;
-import br.com.lottus.auxina.dto.ScenarioType;
-import br.com.lottus.auxina.dto.TestCaseConfigDTO;
-import br.com.lottus.auxina.dto.TestResult;
+import br.com.lottus.auxina.dto.*;
 import br.com.lottus.auxina.service.engine.TestExecutionService;
 import com.github.javafaker.Faker;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class CategoriaTestService {
 
     private final TestExecutionService testExecutionService;
     private final Faker faker;
 
+    // --- IDs de Recursos ---
+    // Categorias que podem ter livros associados por outros módulos
     private static final String CATEGORIA_ID_1_AVENTURA = "1";
     private static final String CATEGORIA_ID_2_CIENCIA = "2";
-    private static final String CATEGORIA_ID_3_HISTORIA = "3";
-    private static final String CATEGORIA_ID_4_FANTASIA_NOVA = "4"; // Assumindo que este será o ID da nova categoria "Fantasia"
+
+    // Categoria para testes de edição e remoção bem-sucedida (sem dependências)
+    private static final String CATEGORIA_ID_3_PARA_EDITAR_E_REMOVER = "3";
+
+    // IDs para cenários de erro
     private static final String CATEGORIA_ID_INEXISTENTE = "999";
-    private static final String CATEGORIA_COR_PADRAO_PARA_TESTE = "#FFA500"; // Laranja
+
+    // --- GRUPOS DE TESTE POR MÉTODO ---
+    private static final String GROUP_0_SETUP = "0. Setup";
+    private static final String GROUP_1_ADICIONAR = "1. Adicionar Categoria";
+    private static final String GROUP_2_LISTAR = "2. Listar Categorias";
+    private static final String GROUP_3_EDITAR = "3. Editar Categoria";
+    private static final String GROUP_4_REMOVER = "4. Remover Categoria";
 
     public CategoriaTestService(TestExecutionService testExecutionService, Faker faker) {
         this.testExecutionService = testExecutionService;
         this.faker = faker;
     }
 
-    private static final String GROUP_ADICIONAR_CATEGORIA = "AdicionarCategoria";
-    private static final String GROUP_LISTAR_CATEGORIAS = "ListarCategorias";
-    private static final String GROUP_REMOVER_CATEGORIA = "RemoverCategoria";
-    private static final String GROUP_EDITAR_CATEGORIA = "EditarCategoria";
-
-    private Map<String, Object> getCategoriaBody(String nome) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("nome", nome);
-        return body;
+    private Mono<TestResult> executeAndLog(TestCaseConfigDTO config) {
+        return testExecutionService.executeTest(config)
+                .doOnSubscribe(subscription -> log.info("➡️  INICIANDO TESTE DE CATEGORIA: {}", config.getTestName()));
     }
-    private Map<String, Object> getCategoriaBodyComCor(String nome, String cor) {
+
+    private Map<String, Object> getCategoriaBody(String nome, String cor) {
         Map<String, Object> body = new HashMap<>();
         body.put("nome", nome);
-        if (cor != null) { // Adiciona cor apenas se fornecida
+        if (cor != null) {
             body.put("cor", cor);
         }
         return body;
     }
 
-    // --- Adicionar Categoria ---
-    // Setup: Cadastrar categorias base para os testes de "Adicionar" e outros módulos.
-    private TestCaseConfigDTO getConfigSetupCategoriaAventura() {
-        return TestCaseConfigDTO.builder().testName("Categoria_Setup_Aventura").methodGroupKey(GROUP_ADICIONAR_CATEGORIA)
-                .httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("Aventura"))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    // =================================================================================
+    // 0. SETUP
+    // =================================================================================
+    private TestCaseConfigDTO getConfigSetup_Aventura() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_Aventura").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("Aventura", "#FFA500")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
-    private TestCaseConfigDTO getConfigSetupCategoriaCiencia() {
-        return TestCaseConfigDTO.builder().testName("Categoria_Setup_Ciencia").methodGroupKey(GROUP_ADICIONAR_CATEGORIA)
-                .httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("Ciência"))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    private TestCaseConfigDTO getConfigSetup_Ciencia() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_Ciencia").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("Ciência", "#0000FF")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
-    private TestCaseConfigDTO getConfigSetupCategoriaHistoria() {
-        return TestCaseConfigDTO.builder().testName("Categoria_Setup_Historia").methodGroupKey(GROUP_ADICIONAR_CATEGORIA)
-                .httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBodyComCor("História", "#FFD700"))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    private TestCaseConfigDTO getConfigSetup_ParaEditarERemover() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_ParaEditarERemover").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("História", "#FFD700")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
 
-    // Cenário 1: Adicionar "Fantasia" com sucesso
-    private TestCaseConfigDTO getConfigAdicionarCategoria_C1_FantasiaSucesso() {
-        return TestCaseConfigDTO.builder().testName("Categoria_Adicionar_C1_FantasiaSucesso").methodGroupKey(GROUP_ADICIONAR_CATEGORIA)
-                .httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("Fantasia"))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    // =================================================================================
+    // 1. ADICIONAR CATEGORIA
+    // =================================================================================
+    private TestCaseConfigDTO getConfigAdicionar_C1_Sucesso() {
+        return TestCaseConfigDTO.builder().testName("Adicionar_C1_Sucesso_Fantasia").methodGroupKey(GROUP_1_ADICIONAR).httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("Fantasia", "#8A2BE2")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
-    // Cenário 2: Tentar adicionar "Aventura" novamente
-    private TestCaseConfigDTO getConfigAdicionarCategoria_C2_NomeJaExistente() {
-        return TestCaseConfigDTO.builder().testName("Categoria_Adicionar_C2_Erro_NomeJaExistente").methodGroupKey(GROUP_ADICIONAR_CATEGORIA)
-                .httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("Aventura"))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(409).build(); // CategoriaJaExistenteException
+    private TestCaseConfigDTO getConfigAdicionar_C2_Erro_NomeJaExistente() {
+        return TestCaseConfigDTO.builder().testName("Adicionar_C2_Erro_NomeJaExistente").methodGroupKey(GROUP_1_ADICIONAR).httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("Aventura", null)).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(409).build();
     }
-    // Cenário 3: Tentar adicionar com nome em branco
-    private TestCaseConfigDTO getConfigAdicionarCategoria_C3_NomeEmBranco() {
-        return TestCaseConfigDTO.builder().testName("Categoria_Adicionar_C3_Erro_NomeEmBranco").methodGroupKey(GROUP_ADICIONAR_CATEGORIA)
-                .httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("Faker::Lorem.word()")) // Será invalidado
-                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
-    // Cenário 4: Tentar adicionar com corpo vazio
-    private TestCaseConfigDTO getConfigAdicionarCategoria_C4_CorpoVazio() {
-        return TestCaseConfigDTO.builder().testName("Categoria_Adicionar_C4_Erro_CorpoVazio").methodGroupKey(GROUP_ADICIONAR_CATEGORIA)
-                .httpMethod("POST").endpoint("/categorias").requestBodyTemplate(new HashMap<>())
-                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
-    // Cenário 5: Adicionar "aventura" (case-insensitive - o BDD diz que o backend permite, então esperamos 201)
-    private TestCaseConfigDTO getConfigAdicionarCategoria_C5_CaseInsensitive() {
-        return TestCaseConfigDTO.builder().testName("Categoria_Adicionar_C5_Sucesso_CaseInsensitive").methodGroupKey(GROUP_ADICIONAR_CATEGORIA)
-                .httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("aventura"))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    private TestCaseConfigDTO getConfigAdicionar_C3_Erro_NomeEmBranco() {
+        return TestCaseConfigDTO.builder().testName("Adicionar_C3_Erro_NomeEmBranco").methodGroupKey(GROUP_1_ADICIONAR).httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("", null)).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
     }
 
-    // --- Listar Categorias ---
-    private TestCaseConfigDTO getConfigListarCategorias_C1_ConteudoContagem() {
-        return TestCaseConfigDTO.builder().testName("Categoria_Listar_C1_ConteudoContagem").methodGroupKey(GROUP_LISTAR_CATEGORIAS)
-                .httpMethod("GET").endpoint("/categorias").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    // =================================================================================
+    // 2. LISTAR CATEGORIAS
+    // =================================================================================
+    private TestCaseConfigDTO getConfigListar_AposSetup() {
+        return TestCaseConfigDTO.builder().testName("Listar_AposSetup").methodGroupKey(GROUP_2_LISTAR).httpMethod("GET").endpoint("/categorias").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    private TestCaseConfigDTO getConfigListarCategorias_C2_VerificarDTOHistoria() { // (O BDD espera ID 3, cor e qtd)
-        return TestCaseConfigDTO.builder().testName("Categoria_Listar_C2_VerificarDTOHistoria").methodGroupKey(GROUP_LISTAR_CATEGORIAS)
-                .httpMethod("GET").endpoint("/categorias").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-    private TestCaseConfigDTO getConfigListarCategorias_C3_AposNovaFantasia() { // (Após Fantasia ser adicionada no C1 de Adicionar)
-        return TestCaseConfigDTO.builder().testName("Categoria_Listar_C3_AposNovaFantasia").methodGroupKey(GROUP_LISTAR_CATEGORIAS)
-                .httpMethod("GET").endpoint("/categorias").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-    private TestCaseConfigDTO getConfigListarCategorias_C4_AposRemocaoHistoria() { // (Este teste depende do teste de remoção de História)
-        return TestCaseConfigDTO.builder().testName("Categoria_Listar_C4_AposRemocaoHistoria").methodGroupKey(GROUP_LISTAR_CATEGORIAS)
-                .httpMethod("GET").endpoint("/categorias").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-    private TestCaseConfigDTO getConfigListarCategorias_C5_SemLivros() { // (Assume que o estado do BD não tem livros nas categorias listadas)
-        return TestCaseConfigDTO.builder().testName("Categoria_Listar_C5_SemLivros").methodGroupKey(GROUP_LISTAR_CATEGORIAS)
-                .httpMethod("GET").endpoint("/categorias").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigListar_AposRemocao() {
+        return TestCaseConfigDTO.builder().testName("Listar_AposRemocao").methodGroupKey(GROUP_2_LISTAR).httpMethod("GET").endpoint("/categorias").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
 
-    // --- Remover Categoria ---
-    private TestCaseConfigDTO getConfigRemoverCategoria_C1_Sucesso() { // Remove ID 3 (História)
-        return TestCaseConfigDTO.builder().testName("Categoria_Remover_C1_Sucesso").methodGroupKey(GROUP_REMOVER_CATEGORIA)
-                .httpMethod("DELETE").endpoint("/categorias/" + CATEGORIA_ID_3_HISTORIA)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(204).build(); // Ou 200
+    // =================================================================================
+    // 3. EDITAR CATEGORIA
+    // =================================================================================
+    private TestCaseConfigDTO getConfigEditar_C1_Sucesso() {
+        return TestCaseConfigDTO.builder().testName("Editar_C1_Sucesso_MudarNomeECor").methodGroupKey(GROUP_3_EDITAR).httpMethod("PUT").endpoint("/categorias/" + CATEGORIA_ID_3_PARA_EDITAR_E_REMOVER).requestBodyTemplate(getCategoriaBody("Biografia", "#008000")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    private TestCaseConfigDTO getConfigRemoverCategoria_C2_NaoExiste() {
-        return TestCaseConfigDTO.builder().testName("Categoria_Remover_C2_Erro_NaoExiste").methodGroupKey(GROUP_REMOVER_CATEGORIA)
-                .httpMethod("DELETE").endpoint("/categorias/" + CATEGORIA_ID_INEXISTENTE)
-                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    private TestCaseConfigDTO getConfigEditar_C2_Erro_NaoExiste() {
+        return TestCaseConfigDTO.builder().testName("Editar_C2_Erro_NaoExiste").methodGroupKey(GROUP_3_EDITAR).httpMethod("PUT").endpoint("/categorias/" + CATEGORIA_ID_INEXISTENTE).requestBodyTemplate(getCategoriaBody("Qualquer Nome", null)).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
     }
-    private TestCaseConfigDTO getConfigRemoverCategoria_C3_ComLivros() { // Remove ID 1 (Aventura), BDD diz que remove com sucesso
-        return TestCaseConfigDTO.builder().testName("Categoria_Remover_C3_ComLivros_Permitido").methodGroupKey(GROUP_REMOVER_CATEGORIA)
-                .httpMethod("DELETE").endpoint("/categorias/" + CATEGORIA_ID_1_AVENTURA)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(204).build();
+    private TestCaseConfigDTO getConfigEditar_C3_Erro_NomeJaExistente() {
+        return TestCaseConfigDTO.builder().testName("Editar_C3_Erro_NomeJaExistente").methodGroupKey(GROUP_3_EDITAR).httpMethod("PUT").endpoint("/categorias/" + CATEGORIA_ID_3_PARA_EDITAR_E_REMOVER).requestBodyTemplate(getCategoriaBody("Aventura", null)).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(409).build();
     }
-    private TestCaseConfigDTO getConfigRemoverCategoria_C4_JaDeletada() { // Tenta remover ID 3 (História) novamente
-        return TestCaseConfigDTO.builder().testName("Categoria_Remover_C4_Erro_JaDeletada").methodGroupKey(GROUP_REMOVER_CATEGORIA)
-                .httpMethod("DELETE").endpoint("/categorias/" + CATEGORIA_ID_3_HISTORIA)
-                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
-    }
-    // C5 de Remover é mais uma asserção sobre o estado do sistema, difícil de modelar como um único TestCaseConfigDTO aqui.
 
-    // --- Editar Categoria ---
-    private TestCaseConfigDTO getConfigEditarCategoria_C1_Sucesso() { // Edita ID 2 (Ciência)
-        return TestCaseConfigDTO.builder().testName("Categoria_Editar_C1_Sucesso").methodGroupKey(GROUP_EDITAR_CATEGORIA)
-                .httpMethod("PUT").endpoint("/categorias/" + CATEGORIA_ID_2_CIENCIA)
-                .requestBodyTemplate(getCategoriaBodyComCor("Ficção Científica", "#0000FF"))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    // =================================================================================
+    // 4. REMOVER CATEGORIA
+    // =================================================================================
+    private TestCaseConfigDTO getConfigRemover_C1_Sucesso_SemLivros() {
+        return TestCaseConfigDTO.builder().testName("Remover_C1_Sucesso_CategoriaLimpa").methodGroupKey(GROUP_4_REMOVER).httpMethod("DELETE").endpoint("/categorias/" + CATEGORIA_ID_3_PARA_EDITAR_E_REMOVER).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(204).build();
     }
-    private TestCaseConfigDTO getConfigEditarCategoria_C2_NaoExiste() {
-        return TestCaseConfigDTO.builder().testName("Categoria_Editar_C2_Erro_NaoExiste").methodGroupKey(GROUP_EDITAR_CATEGORIA)
-                .httpMethod("PUT").endpoint("/categorias/" + CATEGORIA_ID_INEXISTENTE)
-                .requestBodyTemplate(getCategoriaBody("Qualquer Nome"))
-                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    private TestCaseConfigDTO getConfigRemover_C2_Sucesso_ComLivros() {
+        // BDD especifica que a remoção é permitida mesmo com livros.
+        return TestCaseConfigDTO.builder().testName("Remover_C2_Sucesso_ComLivrosAssociados").methodGroupKey(GROUP_4_REMOVER).httpMethod("DELETE").endpoint("/categorias/" + CATEGORIA_ID_1_AVENTURA).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(204).build();
     }
-    private TestCaseConfigDTO getConfigEditarCategoria_C3_NomeJaExistente() { // Edita ID 2 (agora Ficção Científica) para "Aventura"
-        return TestCaseConfigDTO.builder().testName("Categoria_Editar_C3_Sucesso_NomeJaExistente").methodGroupKey(GROUP_EDITAR_CATEGORIA)
-                .httpMethod("PUT").endpoint("/categorias/" + CATEGORIA_ID_2_CIENCIA) // ID da categoria que era "Ciência"
-                .requestBodyTemplate(getCategoriaBody("Aventura")) // Nome da categoria ID 1
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build(); // BDD diz que é permitido
+    private TestCaseConfigDTO getConfigRemover_C3_Erro_NaoExiste() {
+        return TestCaseConfigDTO.builder().testName("Remover_C3_Erro_NaoExiste").methodGroupKey(GROUP_4_REMOVER).httpMethod("DELETE").endpoint("/categorias/" + CATEGORIA_ID_INEXISTENTE).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
     }
-    private TestCaseConfigDTO getConfigEditarCategoria_C4_ApenasCor() { // Edita ID 1 (Aventura)
-        return TestCaseConfigDTO.builder().testName("Categoria_Editar_C4_ApenasCor").methodGroupKey(GROUP_EDITAR_CATEGORIA)
-                .httpMethod("PUT").endpoint("/categorias/" + CATEGORIA_ID_1_AVENTURA)
-                .requestBodyTemplate(getCategoriaBodyComCor("Aventura", CATEGORIA_COR_PADRAO_PARA_TESTE))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-    private TestCaseConfigDTO getConfigEditarCategoria_C5_NomeEmBranco() { // Edita ID 2 (que agora é "Aventura" após C3)
-        return TestCaseConfigDTO.builder().testName("Categoria_Editar_C5_Sucesso_NomeEmBranco").methodGroupKey(GROUP_EDITAR_CATEGORIA)
-                .httpMethod("PUT").endpoint("/categorias/" + CATEGORIA_ID_2_CIENCIA)
-                .requestBodyTemplate(getCategoriaBody("Faker::Lorem.word()")) // Será invalidado para ""
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build(); // BDD diz que é permitido
+    private TestCaseConfigDTO getConfigRemover_C4_Erro_JaRemovida() {
+        return TestCaseConfigDTO.builder().testName("Remover_C4_Erro_JaRemovida").methodGroupKey(GROUP_4_REMOVER).httpMethod("DELETE").endpoint("/categorias/" + CATEGORIA_ID_3_PARA_EDITAR_E_REMOVER).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
     }
 
 
     public Mono<ModuleTestDTO> runAllCategoriaTests() {
-        List<Mono<TestResult>> testMonos = new ArrayList<>();
+        List<TestCaseConfigDTO> testConfigsInOrder = new ArrayList<>();
 
-        // Setup inicial
-        testMonos.add(testExecutionService.executeTest(getConfigSetupCategoriaAventura()));    // ID 1
-        testMonos.add(testExecutionService.executeTest(getConfigSetupCategoriaCiencia()));      // ID 2
-        testMonos.add(testExecutionService.executeTest(getConfigSetupCategoriaHistoria()));     // ID 3
+        // FASE 0: SETUP
+        testConfigsInOrder.add(getConfigSetup_Aventura());
+        testConfigsInOrder.add(getConfigSetup_Ciencia());
+        testConfigsInOrder.add(getConfigSetup_ParaEditarERemover());
 
-        // 1. Adicionar Categoria
-        testMonos.add(testExecutionService.executeTest(getConfigAdicionarCategoria_C1_FantasiaSucesso())); // ID 4 (Fantasia)
-        testMonos.add(testExecutionService.executeTest(getConfigAdicionarCategoria_C2_NomeJaExistente()));
-        testMonos.add(testExecutionService.executeTest(getConfigAdicionarCategoria_C3_NomeEmBranco()));
-        testMonos.add(testExecutionService.executeTest(getConfigAdicionarCategoria_C4_CorpoVazio()));
-        testMonos.add(testExecutionService.executeTest(getConfigAdicionarCategoria_C5_CaseInsensitive())); // ID 5 (aventura)
+        // FASE 1: ADICIONAR
+        testConfigsInOrder.add(getConfigAdicionar_C1_Sucesso());
+        testConfigsInOrder.add(getConfigAdicionar_C2_Erro_NomeJaExistente());
+        testConfigsInOrder.add(getConfigAdicionar_C3_Erro_NomeEmBranco());
 
-        // 2. Listar Categorias
-        testMonos.add(testExecutionService.executeTest(getConfigListarCategorias_C1_ConteudoContagem()));
-        testMonos.add(testExecutionService.executeTest(getConfigListarCategorias_C2_VerificarDTOHistoria()));
-        testMonos.add(testExecutionService.executeTest(getConfigListarCategorias_C3_AposNovaFantasia()));
-        testMonos.add(testExecutionService.executeTest(getConfigListarCategorias_C5_SemLivros()));
+        // FASE 2: LISTAR
+        testConfigsInOrder.add(getConfigListar_AposSetup());
 
-        // 4. Editar Categoria
-        testMonos.add(testExecutionService.executeTest(getConfigEditarCategoria_C1_Sucesso()));
-        testMonos.add(testExecutionService.executeTest(getConfigEditarCategoria_C2_NaoExiste()));
-        testMonos.add(testExecutionService.executeTest(getConfigEditarCategoria_C3_NomeJaExistente()));
-        testMonos.add(testExecutionService.executeTest(getConfigEditarCategoria_C4_ApenasCor()));
-        testMonos.add(testExecutionService.executeTest(getConfigEditarCategoria_C5_NomeEmBranco()));
+        // FASE 3: EDITAR
+        testConfigsInOrder.add(getConfigEditar_C1_Sucesso());
+        testConfigsInOrder.add(getConfigEditar_C2_Erro_NaoExiste());
+        testConfigsInOrder.add(getConfigEditar_C3_Erro_NomeJaExistente());
 
-        // 3. Remover Categoria (A ordem importa em relação a Listar C4)
-//        testMonos.add(testExecutionService.executeTest(getConfigRemoverCategoria_C1_Sucesso())); // Remove ID 3 (História)
-//        testMonos.add(testExecutionService.executeTest(getConfigListarCategorias_C4_AposRemocaoHistoria())); // Verifica lista DEPOIS da remoção
-//        testMonos.add(testExecutionService.executeTest(getConfigRemoverCategoria_C2_NaoExiste()));
-//        testMonos.add(testExecutionService.executeTest(getConfigRemoverCategoria_C3_ComLivros())); // Remove ID 1 (Aventura)
-//        testMonos.add(testExecutionService.executeTest(getConfigRemoverCategoria_C4_JaDeletada())); // Tenta remover ID 3 novamente
+        // FASE 4: REMOVER
+        testConfigsInOrder.add(getConfigRemover_C1_Sucesso_SemLivros());
+        testConfigsInOrder.add(getConfigRemover_C2_Sucesso_ComLivros());
+        testConfigsInOrder.add(getConfigRemover_C4_Erro_JaRemovida());
+        testConfigsInOrder.add(getConfigRemover_C3_Erro_NaoExiste());
 
-        return Flux.mergeSequential(testMonos)
+        // FASE 5: VERIFICAÇÃO FINAL
+        testConfigsInOrder.add(getConfigListar_AposRemocao());
+
+        return Flux.fromIterable(testConfigsInOrder)
+                .concatMap(this::executeAndLog)
                 .collectList()
                 .map(allIndividualResults -> {
                     Map<String, List<TestResult>> groupedByMethod = allIndividualResults.stream()

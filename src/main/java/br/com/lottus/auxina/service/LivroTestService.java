@@ -1,54 +1,60 @@
 package br.com.lottus.auxina.service;
 
-import br.com.lottus.auxina.dto.MethodTestDTO;
-import br.com.lottus.auxina.dto.ModuleTestDTO;
-import br.com.lottus.auxina.dto.ScenarioType;
-import br.com.lottus.auxina.dto.TestCaseConfigDTO;
-import br.com.lottus.auxina.dto.TestResult;
+import br.com.lottus.auxina.dto.*;
 import br.com.lottus.auxina.service.engine.TestExecutionService;
 import com.github.javafaker.Faker;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class LivroTestService {
 
     private final TestExecutionService testExecutionService;
     private final Faker faker;
 
+    // --- IDs de Recursos ---
     private static final String CATEGORIA_ID_1 = "1";
     private static final String CATEGORIA_ID_2 = "2";
     private static final String CATEGORIA_ID_3 = "3";
-    private static final String CATEGORIA_ID_INEXISTENTE = "99999";
+    private static final String CATEGORIA_ID_INEXISTENTE = "999";
 
-    private static final String LIVRO_ID_1_REVOLUCAO = "1";
+    // IDs de Livros (alguns são usados em EmpréstimoTestService)
+    private static final String LIVRO_ID_1_REVOLUCAO = "1"; // Tem empréstimo ativo, não pode ser removido
     private static final String LIVRO_ID_2_DOM_CASMURRO = "2";
-    private static final String LIVRO_ID_3_SENHOR_DOS_ANEIS = "3";
+    private static final String LIVRO_ID_3_SENHOR_ANEIS = "3";
     private static final String LIVRO_ID_4_1984 = "4";
     private static final String LIVRO_ID_5_PEQUENO_PRINCIPE = "5";
     private static final String LIVRO_ID_6_O_HOBBIT = "6";
-    private static final String LIVRO_ID_INEXISTENTE = "99999";
+    private static final String LIVRO_ID_7_PARA_REMOVER = "7"; // Livro dedicado para remoção
+    private static final String LIVRO_ID_INEXISTENTE = "999";
 
+    // --- GRUPOS DE TESTE POR MÉTODO ---
+    private static final String GROUP_0_SETUP = "0. Setup";
+    private static final String GROUP_1_CADASTRAR = "1. Cadastrar Livro";
+    private static final String GROUP_2_BUSCAR_FILTRAR = "2. Buscar e Filtrar Livros";
+    private static final String GROUP_3_EDITAR = "3. Editar Livro";
+    private static final String GROUP_4_REMOVER = "4. Remover Livro";
 
     public LivroTestService(TestExecutionService testExecutionService, Faker faker) {
         this.testExecutionService = testExecutionService;
         this.faker = faker;
     }
 
-    private static final String GROUP_CADASTRAR_LIVRO = "CadastrarLivro";
-    private static final String GROUP_EDITAR_LIVRO = "EditarLivro";
-    private static final String GROUP_REMOVER_LIVRO = "RemoverLivro";
-    private static final String GROUP_BUSCAR_FILTRAR_LIVROS = "BuscarFiltrarLivros"; // Grupo unificado
+    private Mono<TestResult> executeAndLog(TestCaseConfigDTO config) {
+        return testExecutionService.executeTest(config)
+                .doOnSubscribe(subscription -> log.info("➡️  INICIANDO TESTE DE LIVRO: {}", config.getTestName()));
+    }
 
-    private Map<String, Object> getBaseLivroBody(String nome, String autor, int quantidade, String categoriaId, String descricao) {
+    private Map<String, Object> getLivroBody(String nome, String autor, int quantidade, String categoriaId, String descricao) {
         Map<String, Object> body = new HashMap<>();
         body.put("nome", nome);
         body.put("autor", autor);
@@ -58,207 +64,121 @@ public class LivroTestService {
         return body;
     }
 
-    private Map<String, Object> getBaseCadastroLivroBody(String categoriaId) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("nome", "Faker::Book.title");
-        body.put("autor", "Faker::Name.fullName");
-        body.put("quantidade", "Faker::Number.numberBetween(1,100)");
-        body.put("categoriaId", categoriaId);
-        body.put("descricao", "Faker::Lorem.sentence(5,10)");
-        return body;
+    // =================================================================================
+    // 0. SETUP - CADASTRO DOS LIVROS BASE
+    // =================================================================================
+    private TestCaseConfigDTO getConfigSetup_RevolucaoBichos() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_RevolucaoBichos").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/livros").requestBodyTemplate(getLivroBody("A Revolução dos Bichos", "George Orwell", 10, CATEGORIA_ID_1, "Uma sátira política.")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    }
+    private TestCaseConfigDTO getConfigSetup_DomCasmurro() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_DomCasmurro").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/livros").requestBodyTemplate(getLivroBody("Dom Casmurro", "Machado de Assis", 7, CATEGORIA_ID_1, "Clássico brasileiro.")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    }
+    private TestCaseConfigDTO getConfigSetup_SenhorDosAneis() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_SenhorDosAneis").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/livros").requestBodyTemplate(getLivroBody("O Senhor dos Anéis", "J.R.R. Tolkien", 10, CATEGORIA_ID_2, "Trilogia épica.")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    }
+    private TestCaseConfigDTO getConfigSetup_1984() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_1984_QtdZero").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/livros").requestBodyTemplate(getLivroBody("1984", "George Orwell", 0, CATEGORIA_ID_2, "Distopia clássica.")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    }
+    private TestCaseConfigDTO getConfigSetup_PequenoPrincipe() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_PequenoPrincipe").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/livros").requestBodyTemplate(getLivroBody("O Pequeno Príncipe", "Antoine de Saint-Exupéry", 3, CATEGORIA_ID_3, "Encantador.")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    }
+    private TestCaseConfigDTO getConfigSetup_OHobbit() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_OHobbit_QtdUm").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/livros").requestBodyTemplate(getLivroBody("O Hobbit", "J.R.R. Tolkien", 1, CATEGORIA_ID_3, "Aventura na Terra Média.")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    }
+    private TestCaseConfigDTO getConfigSetup_LivroParaRemover() {
+        return TestCaseConfigDTO.builder().testName("Setup_Cadastrar_LivroParaRemover").methodGroupKey(GROUP_0_SETUP).httpMethod("POST").endpoint("/livros").requestBodyTemplate(getLivroBody("A Droga da Obediência", "Pedro Bandeira", 1, CATEGORIA_ID_1, "Série Os Karas.")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
 
-    // --- Cadastrar Livro (POST /livros) ---
-    private TestCaseConfigDTO getConfigCadastrar_C1_RevolucaoBichos() {
-        return TestCaseConfigDTO.builder().testName("Livro_Cadastrar_C1_RevolucaoBichos").methodGroupKey(GROUP_CADASTRAR_LIVRO)
-                .httpMethod("POST").endpoint("/livros")
-                .requestBodyTemplate(getBaseLivroBody("A Revolução dos Bichos", "George Orwell", 10, CATEGORIA_ID_1, "Uma sátira política."))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    // =================================================================================
+    // 1. CADASTRAR LIVRO (Cenários de Erro)
+    // =================================================================================
+    private TestCaseConfigDTO getConfigCadastrar_C1_Erro_CategoriaInexistente() {
+        return TestCaseConfigDTO.builder().testName("Cadastrar_C1_Erro_CategoriaInexistente").methodGroupKey(GROUP_1_CADASTRAR).httpMethod("POST").endpoint("/livros").requestBodyTemplate(getLivroBody("Livro com Categoria Ruim", "Autor Desconhecido", 5, CATEGORIA_ID_INEXISTENTE, "Descrição")).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
     }
-    private TestCaseConfigDTO getConfigCadastrar_C2_CategoriaInexistente() {
-        return TestCaseConfigDTO.builder().testName("Livro_Cadastrar_C2_Erro_CategoriaInexistente").methodGroupKey(GROUP_CADASTRAR_LIVRO)
-                .httpMethod("POST").endpoint("/livros")
-                .requestBodyTemplate(getBaseLivroBody("Livro com Categoria Ruim", "Autor Desconhecido", 5, CATEGORIA_ID_INEXISTENTE, "Descrição"))
-                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
-    private TestCaseConfigDTO getConfigCadastrar_C3_NomeEmBranco() {
-        Map<String, Object> body = getBaseLivroBody("Faker::Book.title", "Autor Válido", 5, CATEGORIA_ID_2, "Descrição");
-        return TestCaseConfigDTO.builder().testName("Livro_Cadastrar_C3_Erro_NomeEmBranco").methodGroupKey(GROUP_CADASTRAR_LIVRO)
-                .httpMethod("POST").endpoint("/livros").requestBodyTemplate(body)
-                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
-    private TestCaseConfigDTO getConfigCadastrar_C4_Livro1984_QtdZero() {
-        return TestCaseConfigDTO.builder().testName("Livro_Cadastrar_C4_1984_QtdZero").methodGroupKey(GROUP_CADASTRAR_LIVRO)
-                .httpMethod("POST").endpoint("/livros")
-                .requestBodyTemplate(getBaseLivroBody("1984", "George Orwell", 0, CATEGORIA_ID_2, "Distopia clássica."))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
-    }
-    private TestCaseConfigDTO getConfigCadastrar_C5_OHobbit_QtdUm() {
-        return TestCaseConfigDTO.builder().testName("Livro_Cadastrar_C5_OHobbit_QtdUm").methodGroupKey(GROUP_CADASTRAR_LIVRO)
-                .httpMethod("POST").endpoint("/livros")
-                .requestBodyTemplate(getBaseLivroBody("O Hobbit", "J.R.R. Tolkien", 1, CATEGORIA_ID_3, "Aventura na Terra Média."))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
-    }
-    // Cadastros adicionais para outros cenários (setup implícito)
-    private TestCaseConfigDTO getConfigSetupCadastrarDomCasmurro() {
-        return TestCaseConfigDTO.builder().testName("Livro_Setup_DomCasmurro").methodGroupKey(GROUP_CADASTRAR_LIVRO)
-                .httpMethod("POST").endpoint("/livros").requestBodyTemplate(getBaseLivroBody("Dom Casmurro", "Machado de Assis", 7, CATEGORIA_ID_1, "Clássico brasileiro."))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
-    }
-    private TestCaseConfigDTO getConfigSetupCadastrarSenhorDosAneis() {
-        return TestCaseConfigDTO.builder().testName("Livro_Setup_SenhorDosAneis").methodGroupKey(GROUP_CADASTRAR_LIVRO)
-                .httpMethod("POST").endpoint("/livros").requestBodyTemplate(getBaseLivroBody("O Senhor dos Anéis", "J.R.R. Tolkien", 10, CATEGORIA_ID_2, "Trilogia épica."))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
-    }
-    private TestCaseConfigDTO getConfigSetupCadastrarPequenoPrincipe() {
-        return TestCaseConfigDTO.builder().testName("Livro_Setup_PequenoPrincipe").methodGroupKey(GROUP_CADASTRAR_LIVRO)
-                .httpMethod("POST").endpoint("/livros").requestBodyTemplate(getBaseLivroBody("O Pequeno Príncipe", "Antoine de Saint-Exupéry", 3, CATEGORIA_ID_3, "Encantador."))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
+    private TestCaseConfigDTO getConfigCadastrar_C2_Erro_NomeEmBranco() {
+        return TestCaseConfigDTO.builder().testName("Cadastrar_C2_Erro_NomeEmBranco").methodGroupKey(GROUP_1_CADASTRAR).httpMethod("POST").endpoint("/livros").requestBodyTemplate(getLivroBody("", "Autor Válido", 5, CATEGORIA_ID_2, "Descrição")).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
     }
 
-    // Livros para testes de histórico de empréstimos
-    private TestCaseConfigDTO getConfigCadastrarLivroFahrenheit451() {
-        return TestCaseConfigDTO.builder().testName("Livro_Cadastrar_Fahrenheit451").methodGroupKey(GROUP_CADASTRAR_LIVRO)
-                .httpMethod("POST").endpoint("/livros").requestBodyTemplate(getBaseCadastroLivroBody(CATEGORIA_ID_1))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
-    }
-    private TestCaseConfigDTO getConfigCadastrarLivroAdmiravelMundoNovo() {
-        return TestCaseConfigDTO.builder().testName("Livro_Cadastrar_AdmiravelMundoNovo").methodGroupKey(GROUP_CADASTRAR_LIVRO)
-                .httpMethod("POST").endpoint("/livros").requestBodyTemplate(getBaseCadastroLivroBody(CATEGORIA_ID_1))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
-    }
-
-    // --- Editar Livro (PUT /livros/{id}) ---
-    private TestCaseConfigDTO getConfigEditar_C1_Sucesso() {
-        return TestCaseConfigDTO.builder().testName("Livro_Editar_C1_Sucesso").methodGroupKey(GROUP_EDITAR_LIVRO)
-                .httpMethod("PUT").endpoint("/livros/" + LIVRO_ID_1_REVOLUCAO)
-                .requestBodyTemplate(getBaseLivroBody("A Revolução dos Bichos (Edição Revisada)", "G. Orwell Revisado", 10, CATEGORIA_ID_1, "Nova descrição."))
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-    private TestCaseConfigDTO getConfigEditar_C2_NaoExiste() {
-        return TestCaseConfigDTO.builder().testName("Livro_Editar_C2_Erro_NaoExiste").methodGroupKey(GROUP_EDITAR_LIVRO)
-                .httpMethod("PUT").endpoint("/livros/" + LIVRO_ID_INEXISTENTE)
-                .requestBodyTemplate(getBaseLivroBody("Nome Qualquer", "Autor Qualquer", 5, CATEGORIA_ID_1, "Desc"))
-                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
-    }
-    private TestCaseConfigDTO getConfigEditar_C3_CategoriaInexistente() {
-        return TestCaseConfigDTO.builder().testName("Livro_Editar_C3_Erro_CategoriaInexistente").methodGroupKey(GROUP_EDITAR_LIVRO)
-                .httpMethod("PUT").endpoint("/livros/" + LIVRO_ID_2_DOM_CASMURRO)
-                .requestBodyTemplate(getBaseLivroBody("Dom Casmurro", "Machado de Assis", 7, CATEGORIA_ID_INEXISTENTE, "Clássico."))
-                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
-    }
-    private TestCaseConfigDTO getConfigEditar_C4_AtualizarQuantidade() {
-        Map<String, Object> body = getBaseLivroBody("O Senhor dos Anéis", "J.R.R. Tolkien", 15, CATEGORIA_ID_2, "Trilogia épica.");
-        return TestCaseConfigDTO.builder().testName("Livro_Editar_C4_AtualizarQuantidade").methodGroupKey(GROUP_EDITAR_LIVRO)
-                .httpMethod("PUT").endpoint("/livros/" + LIVRO_ID_3_SENHOR_DOS_ANEIS).requestBodyTemplate(body)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-    private TestCaseConfigDTO getConfigEditar_C5_ApenasDescricao() {
-        Map<String, Object> body = new HashMap<>(); body.put("descricao", "Uma jornada filosófica e poética.");
-        return TestCaseConfigDTO.builder().testName("Livro_Editar_C5_ApenasDescricao").methodGroupKey(GROUP_EDITAR_LIVRO)
-                .httpMethod("PUT").endpoint("/livros/" + LIVRO_ID_5_PEQUENO_PRINCIPE).requestBodyTemplate(body)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
-    }
-
-    // --- Remover Livro (DELETE /livros/{id}) ---
-    private TestCaseConfigDTO getConfigRemover_C1_Sucesso() {
-        return TestCaseConfigDTO.builder().testName("Livro_Remover_C1_Sucesso").methodGroupKey(GROUP_REMOVER_LIVRO)
-                .httpMethod("DELETE").endpoint("/livros/" + LIVRO_ID_2_DOM_CASMURRO)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build(); // Ajustado para 200 OK
-    }
-    private TestCaseConfigDTO getConfigRemover_C2_NaoExiste() {
-        return TestCaseConfigDTO.builder().testName("Livro_Remover_C2_Erro_NaoExiste").methodGroupKey(GROUP_REMOVER_LIVRO)
-                .httpMethod("DELETE").endpoint("/livros/" + LIVRO_ID_INEXISTENTE)
-                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
-    }
-    private TestCaseConfigDTO getConfigRemover_C3_JaRemovido() {
-        return TestCaseConfigDTO.builder().testName("Livro_Remover_C3_Erro_JaRemovido").methodGroupKey(GROUP_REMOVER_LIVRO)
-                .httpMethod("DELETE").endpoint("/livros/" + LIVRO_ID_2_DOM_CASMURRO)
-                .scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
-    }
-    private TestCaseConfigDTO getConfigRemover_C4_ComEmprestimosAtivos() {
-        return TestCaseConfigDTO.builder().testName("Livro_Remover_C4_Erro_ComEmprestimos").methodGroupKey(GROUP_REMOVER_LIVRO)
-                .httpMethod("DELETE").endpoint("/livros/" + LIVRO_ID_1_REVOLUCAO)
-                .scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build(); // Ou 409
-    }
-
-    // --- Buscar/Filtrar Livros (GET /livros?...) ---
+    // =================================================================================
+    // 2. BUSCAR E FILTRAR LIVROS
+    // =================================================================================
     private TestCaseConfigDTO getConfigBuscar_C1_SemFiltroPaginado() {
-        Map<String, String> qp = new HashMap<>(); qp.put("pagina", "0"); qp.put("tamanho", "5");
-        return TestCaseConfigDTO.builder().testName("Livro_Buscar_C1_SemFiltroPaginado").methodGroupKey(GROUP_BUSCAR_FILTRAR_LIVROS)
-                .httpMethod("GET").endpoint("/livros").queryParamsTemplate(qp)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+        return TestCaseConfigDTO.builder().testName("Buscar_C1_SemFiltroPaginado").methodGroupKey(GROUP_2_BUSCAR_FILTRAR).httpMethod("GET").endpoint("/livros?pagina=0&tamanho=5").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
     private TestCaseConfigDTO getConfigBuscar_C2_PorTermoNome() {
-        Map<String, String> qp = new HashMap<>(); qp.put("valor", "Revolução"); qp.put("pagina", "0"); qp.put("tamanho", "5");
-        return TestCaseConfigDTO.builder().testName("Livro_Buscar_C2_PorTermoNome").methodGroupKey(GROUP_BUSCAR_FILTRAR_LIVROS)
-                .httpMethod("GET").endpoint("/livros").queryParamsTemplate(qp)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+        return TestCaseConfigDTO.builder().testName("Buscar_C2_PorTermoNome_Revolucao").methodGroupKey(GROUP_2_BUSCAR_FILTRAR).httpMethod("GET").endpoint("/livros?valor=Revolução").scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
     private TestCaseConfigDTO getConfigBuscar_C3_PorCategoria() {
-        Map<String, String> qp = new HashMap<>(); qp.put("categoriaId", CATEGORIA_ID_1); qp.put("pagina", "0"); qp.put("tamanho", "10");
-        return TestCaseConfigDTO.builder().testName("Livro_Buscar_C3_PorCategoria").methodGroupKey(GROUP_BUSCAR_FILTRAR_LIVROS)
-                .httpMethod("GET").endpoint("/livros").queryParamsTemplate(qp)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+        return TestCaseConfigDTO.builder().testName("Buscar_C3_PorCategoria").methodGroupKey(GROUP_2_BUSCAR_FILTRAR).httpMethod("GET").endpoint("/livros?categoriaId=" + CATEGORIA_ID_3).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    private TestCaseConfigDTO getConfigBuscar_C4_PorStatusReservado() {
-        Map<String, String> qp = new HashMap<>(); qp.put("status", "RESERVADO"); qp.put("pagina", "0"); qp.put("tamanho", "5");
-        return TestCaseConfigDTO.builder().testName("Livro_Buscar_C4_PorStatusReservado").methodGroupKey(GROUP_BUSCAR_FILTRAR_LIVROS)
-                .httpMethod("GET").endpoint("/livros").queryParamsTemplate(qp)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+
+    // =================================================================================
+    // 3. EDITAR LIVRO
+    // =================================================================================
+    private TestCaseConfigDTO getConfigEditar_C1_Sucesso() {
+        return TestCaseConfigDTO.builder().testName("Editar_C1_Sucesso_TodosCampos").methodGroupKey(GROUP_3_EDITAR).httpMethod("PUT").endpoint("/livros/" + LIVRO_ID_3_SENHOR_ANEIS).requestBodyTemplate(getLivroBody("O Senhor dos Anéis (Ed. Revisada)", "J.R.R. Tolkien", 12, CATEGORIA_ID_2, "Nova descrição épica.")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
-    private TestCaseConfigDTO getConfigBuscar_C5_TermoECategoria() {
-        Map<String, String> qp = new HashMap<>(); qp.put("valor", "Senhor"); qp.put("categoriaId", CATEGORIA_ID_2); qp.put("pagina", "0"); qp.put("tamanho", "5");
-        return TestCaseConfigDTO.builder().testName("Livro_Buscar_C5_TermoECategoria").methodGroupKey(GROUP_BUSCAR_FILTRAR_LIVROS)
-                .httpMethod("GET").endpoint("/livros").queryParamsTemplate(qp)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
+    private TestCaseConfigDTO getConfigEditar_C2_Erro_NaoExiste() {
+        return TestCaseConfigDTO.builder().testName("Editar_C2_Erro_NaoExiste").methodGroupKey(GROUP_3_EDITAR).httpMethod("PUT").endpoint("/livros/" + LIVRO_ID_INEXISTENTE).requestBodyTemplate(getLivroBody("Nome Qualquer", "Autor Qualquer", 5, CATEGORIA_ID_1, "Desc")).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
     }
-    private TestCaseConfigDTO getConfigBuscar_AposRemocaoDomCasmurro() { // Para RemoverLivro C5
-        Map<String, String> qp = new HashMap<>(); qp.put("valor", "Casmurro"); qp.put("pagina", "0"); qp.put("tamanho", "5");
-        return TestCaseConfigDTO.builder().testName("Livro_Buscar_AposRemocaoDomCasmurro").methodGroupKey(GROUP_BUSCAR_FILTRAR_LIVROS)
-                .httpMethod("GET").endpoint("/livros").queryParamsTemplate(qp)
-                .scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build(); // Espera lista vazia
+    private TestCaseConfigDTO getConfigEditar_C3_Erro_CategoriaInexistente() {
+        return TestCaseConfigDTO.builder().testName("Editar_C3_Erro_CategoriaInexistente").methodGroupKey(GROUP_3_EDITAR).httpMethod("PUT").endpoint("/livros/" + LIVRO_ID_2_DOM_CASMURRO).requestBodyTemplate(getLivroBody("Dom Casmurro", "Machado de Assis", 7, CATEGORIA_ID_INEXISTENTE, "Clássico.")).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
+    }
+
+    // =================================================================================
+    // 4. REMOVER LIVRO
+    // =================================================================================
+    private TestCaseConfigDTO getConfigRemover_C1_Sucesso_SemEmprestimo() {
+        return TestCaseConfigDTO.builder().testName("Remover_C1_Sucesso_SemEmprestimo").methodGroupKey(GROUP_4_REMOVER).httpMethod("DELETE").endpoint("/livros/" + LIVRO_ID_7_PARA_REMOVER).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(204).build();
+    }
+    private TestCaseConfigDTO getConfigRemover_C2_Erro_ComEmprestimoAtivo() {
+        return TestCaseConfigDTO.builder().testName("Remover_C2_Erro_ComEmprestimoAtivo").methodGroupKey(GROUP_4_REMOVER).httpMethod("DELETE").endpoint("/livros/" + LIVRO_ID_1_REVOLUCAO).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(409).build();
+    }
+    private TestCaseConfigDTO getConfigRemover_C3_Erro_NaoExiste() {
+        return TestCaseConfigDTO.builder().testName("Remover_C3_Erro_NaoExiste").methodGroupKey(GROUP_4_REMOVER).httpMethod("DELETE").endpoint("/livros/" + LIVRO_ID_INEXISTENTE).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    }
+    private TestCaseConfigDTO getConfigRemover_C4_Erro_JaRemovido() {
+        return TestCaseConfigDTO.builder().testName("Remover_C4_Erro_JaRemovido").methodGroupKey(GROUP_4_REMOVER).httpMethod("DELETE").endpoint("/livros/" + LIVRO_ID_7_PARA_REMOVER).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
+    }
+    private TestCaseConfigDTO getConfigBuscar_VerificarAposRemocao() {
+        return TestCaseConfigDTO.builder().testName("Buscar_VerificarAposRemocao").methodGroupKey(GROUP_4_REMOVER).httpMethod("GET").endpoint("/livros/" + LIVRO_ID_7_PARA_REMOVER).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
     }
 
     public Mono<ModuleTestDTO> runAllLivroTests() {
-        List<Mono<TestResult>> testMonos = new ArrayList<>();
+        List<TestCaseConfigDTO> testConfigsInOrder = new ArrayList<>();
 
-        // Cadastrar Livro
-        testMonos.add(testExecutionService.executeTest(getConfigCadastrar_C1_RevolucaoBichos()));
-        testMonos.add(testExecutionService.executeTest(getConfigSetupCadastrarDomCasmurro()));
-        testMonos.add(testExecutionService.executeTest(getConfigSetupCadastrarSenhorDosAneis()));
-        testMonos.add(testExecutionService.executeTest(getConfigCadastrar_C4_Livro1984_QtdZero()));
-        testMonos.add(testExecutionService.executeTest(getConfigSetupCadastrarPequenoPrincipe()));
-        testMonos.add(testExecutionService.executeTest(getConfigCadastrar_C5_OHobbit_QtdUm()));
-        testMonos.add(testExecutionService.executeTest(getConfigCadastrarLivroFahrenheit451()));
-        testMonos.add(testExecutionService.executeTest(getConfigCadastrarLivroAdmiravelMundoNovo()));
+        // FASE 0: SETUP
+        testConfigsInOrder.add(getConfigSetup_RevolucaoBichos());
+        testConfigsInOrder.add(getConfigSetup_DomCasmurro());
+        testConfigsInOrder.add(getConfigSetup_SenhorDosAneis());
+        testConfigsInOrder.add(getConfigSetup_1984());
+        testConfigsInOrder.add(getConfigSetup_PequenoPrincipe());
+        testConfigsInOrder.add(getConfigSetup_OHobbit());
+        testConfigsInOrder.add(getConfigSetup_LivroParaRemover());
 
-        testMonos.add(testExecutionService.executeTest(getConfigCadastrar_C2_CategoriaInexistente()));
-        testMonos.add(testExecutionService.executeTest(getConfigCadastrar_C3_NomeEmBranco()));
+        // FASE 1: CADASTRAR (CENÁRIOS DE ERRO)
+        testConfigsInOrder.add(getConfigCadastrar_C1_Erro_CategoriaInexistente());
+        testConfigsInOrder.add(getConfigCadastrar_C2_Erro_NomeEmBranco());
 
-        // Atualizar Livro
-        testMonos.add(testExecutionService.executeTest(getConfigEditar_C1_Sucesso()));
-        testMonos.add(testExecutionService.executeTest(getConfigEditar_C2_NaoExiste()));
-        testMonos.add(testExecutionService.executeTest(getConfigEditar_C3_CategoriaInexistente()));
-        testMonos.add(testExecutionService.executeTest(getConfigEditar_C4_AtualizarQuantidade()));
-        testMonos.add(testExecutionService.executeTest(getConfigEditar_C5_ApenasDescricao()));
+        // FASE 2: BUSCAR E FILTRAR
+        testConfigsInOrder.add(getConfigBuscar_C1_SemFiltroPaginado());
+        testConfigsInOrder.add(getConfigBuscar_C2_PorTermoNome());
+        testConfigsInOrder.add(getConfigBuscar_C3_PorCategoria());
 
-        // Buscar/Filtrar Livros
-        testMonos.add(testExecutionService.executeTest(getConfigBuscar_C1_SemFiltroPaginado()));
-        testMonos.add(testExecutionService.executeTest(getConfigBuscar_C2_PorTermoNome()));
-        testMonos.add(testExecutionService.executeTest(getConfigBuscar_C3_PorCategoria()));
-        testMonos.add(testExecutionService.executeTest(getConfigBuscar_C4_PorStatusReservado()));
-        testMonos.add(testExecutionService.executeTest(getConfigBuscar_C5_TermoECategoria()));
+        // FASE 3: EDITAR
+        testConfigsInOrder.add(getConfigEditar_C1_Sucesso());
+        testConfigsInOrder.add(getConfigEditar_C2_Erro_NaoExiste());
+        testConfigsInOrder.add(getConfigEditar_C3_Erro_CategoriaInexistente());
 
-//        // Remover Livro (A ordem importa)
-//        testMonos.add(testExecutionService.executeTest(getConfigRemover_C1_Sucesso()));
-//        testMonos.add(testExecutionService.executeTest(getConfigBuscar_AposRemocaoDomCasmurro())); // Verifica busca após remoção
-//        testMonos.add(testExecutionService.executeTest(getConfigRemover_C2_NaoExiste()));
-//        testMonos.add(testExecutionService.executeTest(getConfigRemover_C3_JaRemovido()));
-//        testMonos.add(testExecutionService.executeTest(getConfigRemover_C4_ComEmprestimosAtivos()));
+        // FASE 4: REMOVER E VERIFICAR
+        testConfigsInOrder.add(getConfigRemover_C2_Erro_ComEmprestimoAtivo());
+        testConfigsInOrder.add(getConfigRemover_C1_Sucesso_SemEmprestimo());
+        testConfigsInOrder.add(getConfigRemover_C4_Erro_JaRemovido());
+        testConfigsInOrder.add(getConfigRemover_C3_Erro_NaoExiste());
+        testConfigsInOrder.add(getConfigBuscar_VerificarAposRemocao());
 
-
-        return Flux.mergeSequential(testMonos)
+        return Flux.fromIterable(testConfigsInOrder)
+                .concatMap(this::executeAndLog)
                 .collectList()
                 .map(allIndividualResults -> {
                     Map<String, List<TestResult>> groupedByMethod = allIndividualResults.stream()
