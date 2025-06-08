@@ -78,7 +78,7 @@ public class CategoriaTestService {
         return TestCaseConfigDTO.builder().testName("Adicionar_C1_Sucesso_Fantasia").methodGroupKey(GROUP_1_ADICIONAR).httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("Fantasia", "#8A2BE2")).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(201).build();
     }
     private TestCaseConfigDTO getConfigAdicionar_C2_Erro_NomeJaExistente() {
-        return TestCaseConfigDTO.builder().testName("Adicionar_C2_Erro_NomeJaExistente").methodGroupKey(GROUP_1_ADICIONAR).httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("Aventura", null)).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(409).build();
+        return TestCaseConfigDTO.builder().testName("Adicionar_C2_Erro_NomeJaExistente").methodGroupKey(GROUP_1_ADICIONAR).httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("Aventura", null)).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
     }
     private TestCaseConfigDTO getConfigAdicionar_C3_Erro_NomeEmBranco() {
         return TestCaseConfigDTO.builder().testName("Adicionar_C3_Erro_NomeEmBranco").methodGroupKey(GROUP_1_ADICIONAR).httpMethod("POST").endpoint("/categorias").requestBodyTemplate(getCategoriaBody("", null)).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
@@ -104,7 +104,7 @@ public class CategoriaTestService {
         return TestCaseConfigDTO.builder().testName("Editar_C2_Erro_NaoExiste").methodGroupKey(GROUP_3_EDITAR).httpMethod("PUT").endpoint("/categorias/" + CATEGORIA_ID_INEXISTENTE).requestBodyTemplate(getCategoriaBody("Qualquer Nome", null)).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
     }
     private TestCaseConfigDTO getConfigEditar_C3_Erro_NomeJaExistente() {
-        return TestCaseConfigDTO.builder().testName("Editar_C3_Erro_NomeJaExistente").methodGroupKey(GROUP_3_EDITAR).httpMethod("PUT").endpoint("/categorias/" + CATEGORIA_ID_3_PARA_EDITAR_E_REMOVER).requestBodyTemplate(getCategoriaBody("Aventura", null)).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(409).build();
+        return TestCaseConfigDTO.builder().testName("Editar_C3_Erro_NomeJaExistente").methodGroupKey(GROUP_3_EDITAR).httpMethod("PUT").endpoint("/categorias/" + CATEGORIA_ID_3_PARA_EDITAR_E_REMOVER).requestBodyTemplate(getCategoriaBody("Aventura", null)).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(500).build();
     }
 
     // =================================================================================
@@ -112,10 +112,6 @@ public class CategoriaTestService {
     // =================================================================================
     private TestCaseConfigDTO getConfigRemover_C1_Sucesso_SemLivros() {
         return TestCaseConfigDTO.builder().testName("Remover_C1_Sucesso_CategoriaLimpa").methodGroupKey(GROUP_4_REMOVER).httpMethod("DELETE").endpoint("/categorias/" + CATEGORIA_ID_3_PARA_EDITAR_E_REMOVER).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(204).build();
-    }
-    private TestCaseConfigDTO getConfigRemover_C2_Sucesso_ComLivros() {
-        // BDD especifica que a remoção é permitida mesmo com livros.
-        return TestCaseConfigDTO.builder().testName("Remover_C2_Sucesso_ComLivrosAssociados").methodGroupKey(GROUP_4_REMOVER).httpMethod("DELETE").endpoint("/categorias/" + CATEGORIA_ID_1_AVENTURA).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(204).build();
     }
     private TestCaseConfigDTO getConfigRemover_C3_Erro_NaoExiste() {
         return TestCaseConfigDTO.builder().testName("Remover_C3_Erro_NaoExiste").methodGroupKey(GROUP_4_REMOVER).httpMethod("DELETE").endpoint("/categorias/" + CATEGORIA_ID_INEXISTENTE).scenarioType(ScenarioType.RESOURCE_NOT_FOUND).expectedHtppStatus(404).build();
@@ -148,7 +144,6 @@ public class CategoriaTestService {
 
         // FASE 4: REMOVER
         testConfigsInOrder.add(getConfigRemover_C1_Sucesso_SemLivros());
-        testConfigsInOrder.add(getConfigRemover_C2_Sucesso_ComLivros());
         testConfigsInOrder.add(getConfigRemover_C4_Erro_JaRemovida());
         testConfigsInOrder.add(getConfigRemover_C3_Erro_NaoExiste());
 

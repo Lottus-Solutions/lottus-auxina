@@ -51,6 +51,8 @@ public class EmprestimoTestService {
     private static final String GROUP_HISTORICO_ALUNO = "5. BuscarHistoricoAluno";
     private static final String GROUP_HISTORICO_LIVRO = "5. BuscarHistoricoLivro";
 
+    private static final String GROUP_REMOVER_DEPENDENTES = "6. RemoverDependentes";
+
 
     public EmprestimoTestService(TestExecutionService testExecutionService, Faker faker) {
         this.testExecutionService = testExecutionService;
@@ -183,6 +185,13 @@ public class EmprestimoTestService {
         return TestCaseConfigDTO.builder().testName("HistoricoLivro_C5_NaoIncluiAtivos").methodGroupKey(GROUP_HISTORICO_LIVRO).httpMethod("GET").endpoint("/emprestimos/historico/livro/" + LIVRO_ID_4_1984_INDISPONIVEL).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
 
+    // =================================================================================
+    // 6. MÉDOTO: Removendo dependentes
+    // =================================================================================
+    private TestCaseConfigDTO getConfigRemover_C2_Erro_ComEmprestimoAtivo() {
+        return TestCaseConfigDTO.builder().testName("Remover_C2_Erro_ComEmprestimoAtivo").methodGroupKey(GROUP_REMOVER_DEPENDENTES).httpMethod("DELETE").endpoint("/livros/" + LIVRO_ID_1_REVOLUCAO).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(409).build();
+    }
+
 
     public Mono<ModuleTestDTO> runAllEmprestimoTests() {
         List<TestCaseConfigDTO> testConfigsInOrder = new ArrayList<>();
@@ -222,6 +231,9 @@ public class EmprestimoTestService {
         testConfigsInOrder.add(getConfigHistLivro_C4_LimitadoASete());
         testConfigsInOrder.add(getConfigHistAluno_C3_AlunoInexistente());
         testConfigsInOrder.add(getConfigHistLivro_C3_LivroInexistente());
+
+        //FASE 6: REMOVENDO DEPENDENTES
+        testConfigsInOrder.add(getConfigRemover_C2_Erro_ComEmprestimoAtivo());
 
         return Flux.fromIterable(testConfigsInOrder)
                 .concatMap(this::executeAndLog)

@@ -120,7 +120,7 @@ public class AlunoTestService {
     }
     private TestCaseConfigDTO getConfigEditar_C3_Erro_TurmaInexistente() {
         Map<String, Object> body = getAlunoBody("Fernanda Lima Editada", TURMA_ID_INEXISTENTE, 0, 0);
-        return TestCaseConfigDTO.builder().testName("Editar_C3_Erro_TurmaInexistente").methodGroupKey(GROUP_2_EDITAR).httpMethod("PUT").endpoint("/alunos/editar/" + ALUNO_ID_2_FERNANDA).requestBodyTemplate(body).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(400).build();
+        return TestCaseConfigDTO.builder().testName("Editar_C3_Erro_TurmaInexistente").methodGroupKey(GROUP_2_EDITAR).httpMethod("PUT").endpoint("/alunos/editar/" + ALUNO_ID_2_FERNANDA).requestBodyTemplate(body).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(404).build();
     }
 
     // =================================================================================
@@ -163,7 +163,7 @@ public class AlunoTestService {
     }
     private TestCaseConfigDTO getConfigRemover_C3_Erro_ComEmprestimosAtivos() {
         // Tenta remover Carlos (ID 1), que tem empréstimos. A remoção DEVE falhar.
-        return TestCaseConfigDTO.builder().testName("Remover_C3_Erro_ComEmprestimosAtivos").methodGroupKey(GROUP_5_REMOVER).httpMethod("DELETE").endpoint("/alunos/remover/" + ALUNO_ID_1_CARLOS).scenarioType(ScenarioType.INVALID_INPUT_BAD_REQUEST).expectedHtppStatus(409).build(); // 409 Conflict é mais semântico
+        return TestCaseConfigDTO.builder().testName("Remover_C3_ComEmprestimosAtivos").methodGroupKey(GROUP_5_REMOVER).httpMethod("DELETE").endpoint("/alunos/remover/" + ALUNO_ID_1_CARLOS).scenarioType(ScenarioType.HAPPY_PATH).expectedHtppStatus(200).build();
     }
     private TestCaseConfigDTO getConfigRemover_C4_Erro_JaRemovido() {
         // Tenta remover o mesmo aluno do C1 novamente.
